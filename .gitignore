@@ -4,3 +4,5 @@ CMakeFiles/
 *.swp
 *~
 Makefile
+*.a
+gtest_unittest
