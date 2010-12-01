@@ -6,3 +6,4 @@ CMakeFiles/
 Makefile
 *.a
 gtest_unittest
+kungjs_test
