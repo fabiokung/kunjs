@@ -1,11 +1,20 @@
-project(kungjs)
 cmake_minimum_required(VERSION 2.8)
+project(kungjs)
 
 set(GTEST_DIR utils/tests/gtest-1.5.0)
+set(BOOST_DIR utils/boost_1_45_0)
 
 add_subdirectory(${GTEST_DIR})
 
-include_directories(${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/${GTEST_DIR}/include)
-link_directories(${PROJECT_SOURCE_DIR}/src)
+include_directories(
+    ${PROJECT_SOURCE_DIR}/${BOOST_DIR}
+    ${PROJECT_SOURCE_DIR}/${GTEST_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src)
 
-cxx_executable(kungjs_test test gtest_main)
+add_executable(kungjs src/kungjs.cc)
+
+cxx_executable(run-tests test gtest_main)
+
+enable_testing()
+add_test(all ${EXECUTABLE_OUTPUT_PATH}/run-tests)
+
