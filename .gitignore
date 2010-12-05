@@ -1,9 +1,11 @@
 CMakeCache.txt
 CMakeFiles/
+Testing/
 *.cmake
 *.swp
 *~
 Makefile
 *.a
 gtest_unittest
-kungjs_test
+kungjs
+run-tests
