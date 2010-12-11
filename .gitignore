@@ -9,3 +9,4 @@ Makefile
 gtest_unittest
 kungjs
 run-tests
+.svn/
