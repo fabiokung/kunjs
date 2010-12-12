@@ -11,9 +11,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/${GTEST_DIR}/include
     ${PROJECT_SOURCE_DIR}/src)
 
-add_executable(kungjs src/kungjs.cc)
+#add_library(grammar src/grammar.cc)
 
-cxx_executable(run-tests test gtest_main)
+cxx_executable(run-tests test gtest_main src/kungjs.cc src/parser.cc)
 
 enable_testing()
 add_test(all ${EXECUTABLE_OUTPUT_PATH}/run-tests)
