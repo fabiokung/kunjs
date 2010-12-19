@@ -1,23 +1,50 @@
 #ifndef KUNGJS_GRAMMAR_H_
 #define KUNGJS_GRAMMAR_H_
 
+#define BOOST_SPIRIT_DEBUG
 #include "ast.h"
 #include <boost/tr1/memory.hpp>
 #include <boost/spirit/home/phoenix.hpp>
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix_statement.hpp>
 #include <boost/spirit/home/phoenix/object/construct.hpp>
-#include <boost/spirit/include/phoenix1_new.hpp>
+#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/phoenix_core.hpp>
+#include <boost/spirit/include/phoenix_statement.hpp>
 #include <vector>
+#include <string>
 
 namespace kungjs {
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
+using boost::phoenix::function;
+
+struct error_handler_
+{
+    template <typename, typename, typename>
+    struct result { typedef void type; };
+
+    template <typename Iterator>
+    void operator()(
+        qi::info const& what
+      , Iterator err_pos, Iterator last) const
+    {
+        std::cout
+            << "Error! Expecting "
+            << what                         // what failed?
+            << " here: \""
+            << std::string(err_pos, last)   // iterators to error-pos, end
+            << "\""
+            << std::endl
+        ;
+    }
+};
+
+function<error_handler_> const error_handler = error_handler_();
+
 template <typename Iterator>
-struct javascript_grammar : qi::grammar<Iterator, std::tr1::shared_ptr<ast::ProgramNode>(), ascii::space_type> {
-  javascript_grammar() : javascript_grammar::base_type(program) {
+struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
+  javascript_grammar() : javascript_grammar::base_type(program, "program") {
 
     using qi::lit;
     using qi::lexeme;
@@ -28,38 +55,80 @@ struct javascript_grammar : qi::grammar<Iterator, std::tr1::shared_ptr<ast::Prog
     using qi::_1;
     using qi::_2;
     using qi::_3;
-    using qi::_a;
+    using qi::_4;
+    using qi::on_error;
+    using qi::fail;
     using qi::int_;
     using qi::double_;
+    using qi::bool_;
+    using boost::phoenix::construct;
     using ascii::string;
     using ascii::char_;
     using ascii::alpha;
     using ascii::alnum;
-    using boost::get;
-    using boost::phoenix::new_;
-    using boost::phoenix::construct;
-    using boost::phoenix::bind;
 
     // Top level
-    program = (*statement)  [_val = construct<std::tr1::shared_ptr<ast::ProgramNode> >(new_<ast::ProgramNode>(_1))];
+    program %= *source_element;
+    source_element %= statement | function_declaration;
 
-    statement = 
-        '{' >> (*statement)       [_val = construct<std::tr1::shared_ptr<ast::Node> >(new_<ast::BlockNode>(_1))] >> '}'  
-        | empty_statement         [_val = _1]
-        | expression_statement    [_val = _1];
+    function_declaration %= lit("function") > identifier > '(' > -formal_parameter_list > ')' > '{' > function_body > '}';
+    function_expression %= lit("function") > -identifier > '(' > -formal_parameter_list > ')' > '{' > function_body > '}';
+    formal_parameter_list %= identifier % ",";
+    function_body %= *source_element;
+
+    statement %=
+        "{" > *statement > "}"
+        | variable_statement
+        | empty_statement
+        | !(lit("function")) >> expression > ";"
+        | if_statement
+        | iteration_statement
+        | continue_statement
+        | break_statement
+        | return_statement
+        | with_statement
+        | labelled_statement
+        | switch_statement
+        | throw_statement
+        | try_statement
+        | lit("debugger") >> ";";
     
-    empty_statement = char_(';')[_val = construct<std::tr1::shared_ptr<ast::Node> >(new_<ast::EmptyNode>())];
+    variable_statement %= "var" >> (variable_declaration % ",") >> ";";
+    variable_declaration %= identifier >> -("=" >> assignment_expression);
 
-    expression_statement = !lit("function") >> expression[_val = _1] >> ';';
+    empty_statement %= char_(';');
 
-    expression = (assignment_expression >> *(',' >> assignment_expression))
-        [_val = bind(&ast::ExpressionNode::create, _1, _2)];
+    if_statement %= lit("if") >> "(" >> expression >> ")" >> statement >> -(lit("else") >> statement);
 
-    assignment_expression %= 
-        conditional_expression[_val = _1]
-        | (lhs_expression >> assignment_operator >> assignment_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, _2, _1, _3)];
+    iteration_statement %=
+        lit("do") >> statement >> "while" >> "(" >> expression >> ")" >> ";"
+        | lit("while") >> "(" >> expression >> ")" >> statement
+        | lit("for") >> "(" >> -expression >> ";" >> -expression >> ";" >> -expression >> ")" >> statement
+        | lit("for") >> "(" >> "var" >> (variable_declaration % ",") >> ";" >> -expression >> ";" >> -expression >> ")" >> statement
+        | lit("for") >> "(" >> lhs_expression >> "in" >> expression >> ")" >> statement
+        | lit("for") >> "(" >> "var" >> variable_declaration >> "in" >> expression >> ")" >> statement;
 
+    continue_statement %= "continue" > !eol > -identifier > ";";
+    break_statement %= "break" > !eol > -identifier > ";";
+    return_statement %= "return" > !eol > -expression > ";";
+
+    with_statement %= lit("with") > "(" > expression > ")" > statement;
+
+    switch_statement %= lit("switch") > "(" > expression > ")" > "{" > *case_clause > -default_clause > *case_clause > "}";
+    case_clause %= "case" > expression > ":" > *statement;
+    default_clause %= lit("default") > ":" > *statement;
+
+    labelled_statement %= identifier >> ":" > statement;
+
+    throw_statement %= "throw" > !eol > expression > ";";
+
+    try_statement %= lit("try") >> "{" >> *statement >> "}" >> (catch_block || finally_block);
+    catch_block %= lit("catch") >> "(" >> identifier >> ")" >> "{" >> *statement >> "}";
+    finally_block %= lit("finally") >> "{" >> *statement >> "}";
+
+    expression %= assignment_expression % lit(',');
+
+    assignment_expression %= *(lhs_expression >> assignment_operator) >> conditional_expression;
     assignment_operator %=
         string("=")
         | string("*=")
@@ -74,125 +143,68 @@ struct javascript_grammar : qi::grammar<Iterator, std::tr1::shared_ptr<ast::Prog
         | string("^=")
         | string("|=");
 
-    conditional_expression =
-        logical_or_expression   [_val = _1];
+    conditional_expression %= logical_or_expression.alias();
         //>> -(lit('?')
              //>> assignment_expresssion
              //>> ':'
              //>> assignment_expression);
 
-    logical_or_expression =
-        logical_and_expression[_val = _1]
-        | (logical_or_expression >> "||" >> logical_and_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "||", _1, _3)];
+    logical_or_expression %= logical_and_expression >> *("||" > logical_and_expression);
 
-    logical_and_expression =
-        bitwise_or_expression[_val = _1]
-        | (logical_and_expression >> "&&" >> bitwise_or_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "&&", _1, _3)];
+    logical_and_expression %= bitwise_or_expression >> *("&&" > bitwise_or_expression);
 
-    bitwise_or_expression =
-        bitwise_xor_expression[_val = _1]
-        | (bitwise_or_expression >> '|' >> bitwise_xor_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "|", _1, _3)];
+    bitwise_or_expression %= bitwise_xor_expression >> *("|" > bitwise_xor_expression);
 
-    bitwise_xor_expression =
-        bitwise_and_expression[_val = _1]
-        | (bitwise_xor_expression >> '^' >> bitwise_and_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "^", _1, _3)];
+    bitwise_xor_expression %= bitwise_and_expression >> *("^" > bitwise_and_expression);
 
-    bitwise_and_expression =
-        equality_expression[_val = _1]
-        | (bitwise_and_expression >> '&' >> equality_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "&", _1, _3)];
+    bitwise_and_expression %= equality_expression >> *("&" > equality_expression);
 
-    equality_expression =
-        relational_expression[_val = _1]
+    equality_expression %= relational_expression >> *(equality_operator > relational_expression);
+    equality_operator %= 
+        string("==")
+        | string("!=")
+        | string("===")
+        | string("!==");
 
-        | (equality_expression >> "==" >> relational_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "==", _1, _3)]
+    relational_expression %= shift_expression >> *(relational_operator > shift_expression);
+    relational_operator %= 
+        string("<")
+        | string (">")
+        | string("<=")
+        | string(">=")
+        | string("instanceof")
+        | string("in");
 
-        | (equality_expression >> "!=" >> relational_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "!=", _1, _3)]
+    shift_expression %= additive_expression >> *(shift_operator > additive_expression);
+    shift_operator %=
+        string("<<")
+        | string(">>")
+        | string(">>>");
 
-        | (equality_expression >> "===" >> relational_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "===", _1, _3)]
+    additive_expression %= multiplicative_expression >> *(additive_operator > multiplicative_expression);
+    additive_operator %= string("+") | string("-");
 
-        | (equality_expression >> "!==" >> relational_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "!==", _1, _3)];
+    multiplicative_expression %= unary_expression >> *(multiplicative_operator > unary_expression);
+    multiplicative_operator %=
+        string("*")
+        | string("/")
+        | string("%");
 
-    relational_expression = 
-        shift_expression[_val = _1]
+    unary_expression %= *unary_operator >> postfix_expression;
+    unary_operator %= string("delete")
+        | string("void")
+        | string("typeof")
+        | string("++")
+        | string("--")
+        | string("+")
+        | string("-")
+        | string("~")
+        | string("!");
 
-        | (relational_expression >> '<' >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "<", _1, _3)]
+    postfix_expression %= lhs_expression >> -(!eol >> postfix_operator);
+    postfix_operator %= string("++") | string("--");
 
-        | (relational_expression >> '>' >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, ">", _1, _3)]
-
-        | (relational_expression >> "<=" >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "<=", _1, _3)]
-
-        | (relational_expression >> ">=" >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, ">=", _1, _3)]
-
-        | (relational_expression >> "instanceof" >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "instanceof", _1, _3)]
-
-        | (relational_expression >> "in" >> shift_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "in", _1, _3)];
-
-    shift_expression =
-        additive_expression[_val = _1]
-
-        | (shift_expression >> "<<" >> additive_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "<<", _1, _3)]
-
-        | (shift_expression >> ">>" >> additive_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, ">>", _1, _3)]
-
-        | (shift_expression >> ">>>" >> additive_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, ">>>", _1, _3)];
-
-    additive_expression =
-        multiplicative_expression[_val = _1]
-
-        | (additive_expression >> '+' >> multiplicative_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "+", _1, _3)]
-
-        | (additive_expression >> '-' >> multiplicative_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "-", _1, _3)];
-
-    multiplicative_expression =
-        unary_expression[_val = _1]
-        | (multiplicative_expression >> '*' >> unary_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "*", _1, _3)]
-
-        | (multiplicative_expression >> '/' >> unary_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "/", _1, _3)]
-
-        | (multiplicative_expression >> '%' >> unary_expression)
-            [_val = bind(&ast::BinaryOperatorNode::create, "%", _1, _3)];
-
-    unary_expression = 
-        postfix_expression              [_val = _1]
-        | "delete" >> unary_expression  [_val = bind(&ast::DeleteNode::create, _1)]
-        //| "void" >> unary_expression    
-        //| "typeof" >> unary_expression
-        | "++" >> unary_expression      [_val = bind(&ast::PreIncrementNode::create, _1)]
-        | "--" >> unary_expression      [_val = bind(&ast::PreDecrementNode::create, _1)]
-        //| '+' >> unary_expression
-        //| '-' >> unary_expression
-        //| '~' >> unary_expression
-        | '!' >> unary_expression       [_val = bind(&ast::NotNode::create, _1)];
-
-    postfix_expression = 
-        lhs_expression                        [_val = _1]
-        | (lhs_expression >> !eol >> "++")    [_val = bind(&ast::PostIncrementNode::create, _1)]
-        | (lhs_expression >> !eol >> "--")    [_val = bind(&ast::PostDecrementNode::create, _1)];
-
-    lhs_expression %=
-        new_expression;
+    lhs_expression %= new_expression.alias();
         //| call_expression;
 
     //call_expression %=
@@ -207,38 +219,36 @@ struct javascript_grammar : qi::grammar<Iterator, std::tr1::shared_ptr<ast::Prog
              //>> *(',' >> assignment_expression))
         //>> ')';
 
-    new_expression =
-        member_expression           [_val = _1]
-        | "new" >> new_expression   [_val = bind(&ast::NewNode::create, _1)];
+    new_expression %= *lit("new") >> member_expression;
 
-    member_expression %=
-        primary_expression;
+    member_expression %= primary_expression.alias();
         //| function_expression
         //| member_expression >> '[' >> expression >> ']'
         //| member_expression >> '.' >> identifier_name
         //| "new" >> member_expression >> arguments;
 
-    primary_expression =
-        lit("this")                   [_val = construct<std::tr1::shared_ptr<ast::ThisNode> >(new_<ast::ThisNode>())]
-        | identifier                  [_val = _1]
-        | literal                     [_val = _1]
-        | '(' >> expression           [_val = _1] >> ')';
+    primary_expression %=
+        this_reference
+        | identifier
+        | literal 
+        | '(' >> expression >> ')';
+
+    this_reference %= string("this");
 
     // Lexical Grammar
-    identifier =
-        (identifier_name - reserved_word)[_val = bind(&ast::IdentifierNode::create, _1)];
+    identifier %= (identifier_name - reserved_word);
 
     // FIXME: unicode characters
-    identifier_name %=
-        identifier_start >> *alnum;
+    identifier_name %= identifier_start >> *alnum;
 
-    identifier_start %= alpha | string('$') | string('_');
+    identifier_start %= alpha | char_('$') | char_('_');
 
-    reserved_word =
-        keyword                 [_val = construct<std::tr1::shared_ptr<ast::Node> >(new_<ast::KeywordNode>(_1))]
-        | future_reserved_word  [_val = construct<std::tr1::shared_ptr<ast::Node> >(new_<ast::KeywordNode>(_1))]
-        | null_literal          [_val = _1]
-        | boolean_literal       [_val = _1];
+    reserved_word %=
+        keyword
+        | future_reserved_word
+        | string("null")
+        | string("true")
+        | string("false");
 
     keyword %=
         string("break") | string("do") | string("case") | string("else")
@@ -255,70 +265,170 @@ struct javascript_grammar : qi::grammar<Iterator, std::tr1::shared_ptr<ast::Prog
         | string("yield") | string("extends") | string("import") | string("private")
         | string("protected") | string("super") | string("public") |string( "static");
 
-    literal =
-        null_literal      [_val = _1]
-        | boolean_literal [_val = _1]
-        | numeric_literal [_val = _1]
-        | string_literal  [_val = _1];
+    literal %=
+        null_literal
+        | bool_
+        | numeric_literal
+        | string_literal;
 
-    null_literal = lit("null")[_val = construct<std::tr1::shared_ptr<ast::NullNode> >(new_<ast::NullNode>())];
+    null_literal %= string("null");
 
-    boolean_literal = 
-        lit("true")    [_val = bind(&ast::LiteralNode<bool>::create, true)]
-        | lit("false")   [_val = bind(&ast::LiteralNode<bool>::create, false)];
+    numeric_literal %= double_ | int_;
 
-    numeric_literal = 
-        int_        [_val = bind(&ast::LiteralNode<int>::create, _1)]
-        | double_   [_val = bind(&ast::LiteralNode<double>::create, _1)];
+    string_literal %=
+        '"' >> lexeme[*(~char_('"'))] >> '"'
+        | '\'' >> lexeme[*(~char_('\''))] >> '\'';
 
-    string_literal =
-        raw[lexeme['"' >> *(char_ - '"') >> '"']]            [_val = bind(&ast::LiteralNode<std::string>::create, _1)]
-        | raw[lexeme['\'' >> *(char_ - '\'') >> '\'']]       [_val = bind(&ast::LiteralNode<std::string>::create, _1)];
+    on_error<fail>(program, error_handler(_4, _3, _2));
 
+    BOOST_SPIRIT_DEBUG_NODE(program);
+    BOOST_SPIRIT_DEBUG_NODE(source_element);
+    BOOST_SPIRIT_DEBUG_NODE(function_declaration);
+    BOOST_SPIRIT_DEBUG_NODE(function_expression);
+    BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
+    BOOST_SPIRIT_DEBUG_NODE(function_body);
+    BOOST_SPIRIT_DEBUG_NODE(source_element);
+    BOOST_SPIRIT_DEBUG_NODE(statement);
+    BOOST_SPIRIT_DEBUG_NODE(variable_statement);
+    BOOST_SPIRIT_DEBUG_NODE(variable_declaration);
+    BOOST_SPIRIT_DEBUG_NODE(empty_statement);
+    BOOST_SPIRIT_DEBUG_NODE(if_statement);
+    BOOST_SPIRIT_DEBUG_NODE(iteration_statement);
+    BOOST_SPIRIT_DEBUG_NODE(continue_statement);
+    BOOST_SPIRIT_DEBUG_NODE(break_statement);
+    BOOST_SPIRIT_DEBUG_NODE(return_statement);
+    BOOST_SPIRIT_DEBUG_NODE(with_statement);
+    BOOST_SPIRIT_DEBUG_NODE(labelled_statement);
+    BOOST_SPIRIT_DEBUG_NODE(switch_statement);
+    BOOST_SPIRIT_DEBUG_NODE(switch_statement);
+    BOOST_SPIRIT_DEBUG_NODE(case_clause);
+    BOOST_SPIRIT_DEBUG_NODE(default_clause);
+    BOOST_SPIRIT_DEBUG_NODE(catch_block);
+    BOOST_SPIRIT_DEBUG_NODE(finally_block);
+    BOOST_SPIRIT_DEBUG_NODE(throw_statement);
+    BOOST_SPIRIT_DEBUG_NODE(try_statement);
+    BOOST_SPIRIT_DEBUG_NODE(expression);
+    BOOST_SPIRIT_DEBUG_NODE(assignment_expression);
+    BOOST_SPIRIT_DEBUG_NODE(assignment_operator);
+    BOOST_SPIRIT_DEBUG_NODE(conditional_expression);
+    BOOST_SPIRIT_DEBUG_NODE(logical_or_expression);
+    BOOST_SPIRIT_DEBUG_NODE(logical_and_expression);
+    BOOST_SPIRIT_DEBUG_NODE(bitwise_or_expression);
+    BOOST_SPIRIT_DEBUG_NODE(bitwise_xor_expression);
+    BOOST_SPIRIT_DEBUG_NODE(bitwise_and_expression);
+    BOOST_SPIRIT_DEBUG_NODE(equality_expression);
+    BOOST_SPIRIT_DEBUG_NODE(equality_operator);
+    BOOST_SPIRIT_DEBUG_NODE(relational_expression);
+    BOOST_SPIRIT_DEBUG_NODE(relational_operator);
+    BOOST_SPIRIT_DEBUG_NODE(shift_expression);
+    BOOST_SPIRIT_DEBUG_NODE(shift_operator);
+    BOOST_SPIRIT_DEBUG_NODE(additive_expression);
+    BOOST_SPIRIT_DEBUG_NODE(additive_operator);
+    BOOST_SPIRIT_DEBUG_NODE(multiplicative_expression);
+    BOOST_SPIRIT_DEBUG_NODE(multiplicative_operator);
+    BOOST_SPIRIT_DEBUG_NODE(unary_expression);
+    BOOST_SPIRIT_DEBUG_NODE(unary_operator);
+    BOOST_SPIRIT_DEBUG_NODE(postfix_expression);
+    BOOST_SPIRIT_DEBUG_NODE(postfix_operator);
+    BOOST_SPIRIT_DEBUG_NODE(lhs_expression);
+    BOOST_SPIRIT_DEBUG_NODE(new_expression);
+    BOOST_SPIRIT_DEBUG_NODE(member_expression);
+    BOOST_SPIRIT_DEBUG_NODE(primary_expression);
+    BOOST_SPIRIT_DEBUG_NODE(this_reference);
+    BOOST_SPIRIT_DEBUG_NODE(identifier);
+    BOOST_SPIRIT_DEBUG_NODE(identifier_name);
+    BOOST_SPIRIT_DEBUG_NODE(identifier_start);
+    BOOST_SPIRIT_DEBUG_NODE(reserved_word);
+    BOOST_SPIRIT_DEBUG_NODE(keyword);
+    BOOST_SPIRIT_DEBUG_NODE(future_reserved_word);
+    BOOST_SPIRIT_DEBUG_NODE(literal);
+    BOOST_SPIRIT_DEBUG_NODE(null_literal);
+    BOOST_SPIRIT_DEBUG_NODE(numeric_literal);
+    BOOST_SPIRIT_DEBUG_NODE(string_literal);
   }
 
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::ProgramNode>(), ascii::space_type> program;
-  //qi::rule<Iterator, std::tr1::shared_ptr<ast::FunctionNode>(), ascii::space_type> function_declaration;
-  //qi::rule<Iterator, std::tr1::shared_ptr<ast::FunctionNode>(), ascii::space_type> function_expression;
-  //qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> function_body;
+  qi::rule<Iterator, ascii::space_type> program;
+  qi::rule<Iterator, ascii::space_type> source_element;
+  qi::rule<Iterator, ascii::space_type> function_declaration;
+  qi::rule<Iterator, ascii::space_type> function_expression;
+  qi::rule<Iterator, ascii::space_type> formal_parameter_list;
+  qi::rule<Iterator, ascii::space_type> function_body;
 
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> statement;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> empty_statement;
+  qi::rule<Iterator, ascii::space_type> statement;
+  qi::rule<Iterator, ascii::space_type> variable_statement;
+  qi::rule<Iterator, ascii::space_type> variable_declaration;
+  qi::rule<Iterator, ascii::space_type> empty_statement;
+  qi::rule<Iterator, ascii::space_type> if_statement;
+  qi::rule<Iterator, ascii::space_type> iteration_statement;
+  qi::rule<Iterator, ascii::space_type> continue_statement;
+  qi::rule<Iterator, ascii::space_type> break_statement;
+  qi::rule<Iterator, ascii::space_type> return_statement;
+  qi::rule<Iterator, ascii::space_type> with_statement;
+  qi::rule<Iterator, ascii::space_type> labelled_statement;
+  qi::rule<Iterator, ascii::space_type> switch_statement;
+  qi::rule<Iterator, ascii::space_type> case_clause;
+  qi::rule<Iterator, ascii::space_type> default_clause;
+  qi::rule<Iterator, ascii::space_type> catch_block;
+  qi::rule<Iterator, ascii::space_type> finally_block;
+  qi::rule<Iterator, ascii::space_type> throw_statement;
+  qi::rule<Iterator, ascii::space_type> try_statement;
 
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> expression_statement;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> assignment_expression;
+  qi::rule<Iterator, ascii::space_type> expression;
+
+  qi::rule<Iterator, ascii::space_type> assignment_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> assignment_operator;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> conditional_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> logical_or_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> logical_and_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> bitwise_or_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> bitwise_xor_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> bitwise_and_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> equality_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> relational_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> shift_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> additive_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> multiplicative_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> unary_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> postfix_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> lhs_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> new_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> member_expression;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> primary_expression;
 
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::IdentifierNode>(), ascii::space_type> identifier;
+  qi::rule<Iterator, ascii::space_type> conditional_expression;
+  qi::rule<Iterator, ascii::space_type> logical_or_expression;
+
+  qi::rule<Iterator, ascii::space_type> logical_and_expression;
+
+  qi::rule<Iterator, ascii::space_type> bitwise_or_expression;
+
+  qi::rule<Iterator, ascii::space_type> bitwise_xor_expression;
+
+  qi::rule<Iterator, ascii::space_type> bitwise_and_expression;
+
+  qi::rule<Iterator, ascii::space_type> equality_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> equality_operator;
+
+  qi::rule<Iterator, ascii::space_type> relational_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> relational_operator;
+
+  qi::rule<Iterator, ascii::space_type> shift_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> shift_operator;
+
+  qi::rule<Iterator, ascii::space_type> additive_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> additive_operator;
+
+  qi::rule<Iterator, ascii::space_type> multiplicative_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> multiplicative_operator;
+
+  qi::rule<Iterator, ascii::space_type> unary_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> unary_operator;
+
+  qi::rule<Iterator, ascii::space_type> postfix_expression;
+  qi::rule<Iterator, std::string(), ascii::space_type> postfix_operator;
+
+  qi::rule<Iterator, ascii::space_type> lhs_expression;
+
+  qi::rule<Iterator, ascii::space_type> new_expression;
+
+  qi::rule<Iterator, ascii::space_type> member_expression;
+  qi::rule<Iterator, ascii::space_type> primary_expression;
+  qi::rule<Iterator, ascii::space_type> this_reference;
+
+  qi::rule<Iterator, ascii::space_type> identifier;
   qi::rule<Iterator, std::string(), ascii::space_type> identifier_name;
-  qi::rule<Iterator, std::string(), ascii::space_type> identifier_start;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> reserved_word;
+  qi::rule<Iterator, char(), ascii::space_type> identifier_start;
+  qi::rule<Iterator, std::string(), ascii::space_type> reserved_word;
   qi::rule<Iterator, std::string(), ascii::space_type> keyword;
   qi::rule<Iterator, std::string(), ascii::space_type> future_reserved_word;
 
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> literal;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> null_literal;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::LiteralNode<bool> >, ascii::space_type> boolean_literal;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::Node>(), ascii::space_type> numeric_literal;
-  qi::rule<Iterator, std::tr1::shared_ptr<ast::LiteralNode<std::string> >(), ascii::space_type> string_literal;
+  qi::rule<Iterator, ascii::space_type> literal;
+  qi::rule<Iterator, ascii::space_type> null_literal;
+  qi::rule<Iterator, ascii::space_type> numeric_literal;
+  qi::rule<Iterator, std::string(), ascii::space_type> string_literal;
 };
 
 } // namespace kungjs
