@@ -1,304 +1,267 @@
 #ifndef KUNGJS_AST_H_
 #define KUNGJS_AST_H_
 
+#include <boost/config/warning_disable.hpp>
 #include <boost/tr1/memory.hpp>
+#include <boost/optional.hpp>
+#include <boost/variant/recursive_variant.hpp>
+#include <boost/spirit/include/phoenix_fusion.hpp>
+#include <boost/fusion/include/adapt_struct.hpp>
 #include <vector>
+#include <string>
 
-namespace kungjs {
-namespace ast {
+namespace kungjs { namespace ast {
 
-class Node {
- public:
-  virtual ~Node();
-  //virtual visit(const Compiler& compiler) = 0;
+struct Null {
+  Null() {}
+  Null(std::string value) : value(value) {}
+  std::string value;
 };
 
-template <typename T>
-class LiteralNode : public Node {
- public:
-  explicit LiteralNode(T value)
-      : value_(value) {}
+typedef boost::variant<int, double> Numeric;
+typedef boost::variant<ast::Null, bool, double, std::string> Literal;
+struct Identifier {
+  Identifier() {}
+  Identifier(std::string value) : name(value) {}
+  std::string name;
+};
+struct This {
+  This() {}
+  This(std::string value) : value(value) {}
+  std::string value;
+};
+struct ExpressionHolder;
 
-  T value() {
-    return value_;
-  }
+typedef boost::variant<This, Identifier, Literal, boost::recursive_wrapper<ExpressionHolder> > PrimaryExpression;
 
-  static std::tr1::shared_ptr<LiteralNode<T> > create(T value) {
-    return std::tr1::shared_ptr<LiteralNode<T> >(new LiteralNode<T>(value));
-  }
+typedef PrimaryExpression MemberExpression;
 
- private:
-  T value_;
+struct NewOperation;
+typedef boost::variant<MemberExpression, boost::recursive_wrapper<NewOperation> > NewExpression;
+struct NewOperation {
+  NewExpression rhs;
 };
 
-class KeywordNode : public Node {
- public:
-  explicit KeywordNode(std::string value)
-      : value_(value) {}
+typedef NewExpression LhsExpression;
 
-  const std::string value() const {
-    return value_;
-  }
-
- private:
-  std::string value_;
+struct PostfixOperation;
+typedef boost::variant<LhsExpression, boost::recursive_wrapper<PostfixOperation> > PostfixExpression;
+struct PostfixOperation {
+  LhsExpression lhs;
+  std::string operator_;
 };
 
-class IdentifierNode : public Node {
- public:
-  explicit IdentifierNode(std::string value)
-      : value_(value) {}
-
-  const std::string value() const {
-    return value_;
-  }
-
-  static std::tr1::shared_ptr<IdentifierNode> create(std::string value) {
-    return std::tr1::shared_ptr<IdentifierNode>(new IdentifierNode(value));
-  }
-
- private:
-  std::string value_;
+struct UnaryOperation;
+typedef boost::variant<PostfixExpression, boost::recursive_wrapper<UnaryOperation> > UnaryExpression;
+struct UnaryOperation {
+  std::string operator_;
+  UnaryExpression rhs;
 };
 
-class NullNode : public LiteralNode<std::string> {
- public:
-  NullNode() : LiteralNode<std::string>("null") {}
+struct MultiplicativeOperation;
+typedef boost::variant<UnaryExpression, boost::recursive_wrapper<MultiplicativeOperation> > MultiplicativeExpression;
+struct MultiplicativeOperation {
+  MultiplicativeExpression lhs;
+  std::string operator_;
+  UnaryExpression rhs;
 };
 
-class ThisNode : public Node {};
-
-class DeleteNode : public Node {
- public:
-  explicit DeleteNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<DeleteNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<DeleteNode>(new DeleteNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct AdditiveOperation;
+typedef boost::variant<MultiplicativeExpression, boost::recursive_wrapper<AdditiveOperation> > AdditiveExpression;
+struct AdditiveOperation {
+  AdditiveExpression lhs;
+  std::string operator_;
+  MultiplicativeExpression rhs;
 };
 
-class PreDecrementNode : public Node {
- public:
-  explicit PreDecrementNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<PreDecrementNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<PreDecrementNode>(new PreDecrementNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct ShiftOperation;
+typedef boost::variant<AdditiveExpression, boost::recursive_wrapper<ShiftOperation> > ShiftExpression;
+struct ShiftOperation {
+  ShiftExpression lhs;
+  std::string operator_;
+  AdditiveExpression rhs;
 };
 
-class PreIncrementNode : public Node {
- public:
-  explicit PreIncrementNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<PreIncrementNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<PreIncrementNode>(new PreIncrementNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct RelationalOperation;
+typedef boost::variant<ShiftExpression, boost::recursive_wrapper<RelationalOperation> > RelationalExpression;
+struct RelationalOperation {
+  RelationalExpression lhs;
+  std::string operator_;
+  ShiftExpression rhs;
 };
 
-class PostDecrementNode : public Node {
- public:
-  explicit PostDecrementNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<PostDecrementNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<PostDecrementNode>(new PostDecrementNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct EqualityOperation;
+typedef boost::variant<RelationalExpression, boost::recursive_wrapper<EqualityOperation> > EqualityExpression;
+struct EqualityOperation {
+  EqualityExpression lhs;
+  std::string operator_;
+  RelationalExpression rhs;
 };
 
-class PostIncrementNode : public Node {
- public:
-  explicit PostIncrementNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<PostIncrementNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<PostIncrementNode>(new PostIncrementNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct BitwiseAndOperation;
+typedef boost::variant<EqualityExpression, boost::recursive_wrapper<BitwiseAndOperation> > BitwiseAndExpression;
+struct BitwiseAndOperation {
+  BitwiseAndExpression lhs;
+  EqualityExpression rhs;
 };
 
-class NotNode : public Node {
- public:
-  explicit NotNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<NotNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<NotNode>(new NotNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct BitwiseXorOperation;
+typedef boost::variant<BitwiseAndExpression, boost::recursive_wrapper<BitwiseXorOperation> > BitwiseXorExpression;
+struct BitwiseXorOperation {
+  BitwiseXorExpression lhs;
+  BitwiseAndExpression rhs;
 };
 
-class NewNode : public Node {
- public:
-  explicit NewNode(std::tr1::shared_ptr<Node> operand)
-      : operand_(operand) {}
-
-  const std::tr1::shared_ptr<Node> operand() const {
-    return operand_;
-  }
-
-  static std::tr1::shared_ptr<NewNode> create(std::tr1::shared_ptr<Node> operand) {
-    return std::tr1::shared_ptr<NewNode>(new NewNode(operand));
-  }
-
- private:
-  std::tr1::shared_ptr<Node> operand_;
+struct BitwiseOrOperation;
+typedef boost::variant<BitwiseXorExpression, boost::recursive_wrapper<BitwiseOrOperation> > BitwiseOrExpression;
+struct BitwiseOrOperation {
+  BitwiseOrExpression lhs;
+  BitwiseXorExpression rhs;
 };
 
-class BinaryOperatorNode : public Node {
- public:
-  BinaryOperatorNode(std::string oper,
-                     std::tr1::shared_ptr<Node> lhs,
-                     std::tr1::shared_ptr<Node> rhs)
-      : oper_(oper), lhs_(lhs), rhs_(rhs) {}
-
-  const std::string oper() const {
-    return oper_;
-  }
-
-  const std::tr1::shared_ptr<Node> lhs() const {
-    return lhs_;
-  }
-
-  const std::tr1::shared_ptr<Node> rhs() const {
-    return rhs_;
-  }
-
-  static std::tr1::shared_ptr<BinaryOperatorNode> create(std::string oper,
-                                                         std::tr1::shared_ptr<Node> lhs,
-                                                         std::tr1::shared_ptr<Node> rhs) {
-    return std::tr1::shared_ptr<BinaryOperatorNode>(new BinaryOperatorNode(oper, lhs, rhs));
-  }
-
- private:
-  std::string oper_;
-  std::tr1::shared_ptr<Node> lhs_;
-  std::tr1::shared_ptr<Node> rhs_;
+struct AndOperation;
+typedef boost::variant<BitwiseOrExpression, boost::recursive_wrapper<AndOperation> > LogicalAndExpression;
+struct AndOperation {
+  LogicalAndExpression lhs;
+  BitwiseOrExpression rhs;
 };
 
-class AssignmentNode : public Node {
- public:
-  AssignmentNode(std::string oper,
-                 std::tr1::shared_ptr<Node> lhs,
-                 std::tr1::shared_ptr<Node> rhs)
-      : oper_(oper), lhs_(lhs), rhs_(rhs) {}
-
-  const std::string oper() const {
-    return oper_;
-  }
-
-  const std::tr1::shared_ptr<Node> lhs() const {
-    return lhs_;
-  }
-
-  const std::tr1::shared_ptr<Node> rhs() const {
-    return rhs_;
-  }
-
-  static std::tr1::shared_ptr<AssignmentNode> create(std::string oper,
-                                                     std::tr1::shared_ptr<Node> lhs,
-                                                     std::tr1::shared_ptr<Node> rhs) {
-    return std::tr1::shared_ptr<AssignmentNode>(new AssignmentNode(oper, lhs, rhs));
-  }
-
- private:
-  std::string oper_;
-  std::tr1::shared_ptr<Node> lhs_;
-  std::tr1::shared_ptr<Node> rhs_;
+struct OrOperation;
+typedef boost::variant<LogicalAndExpression, boost::recursive_wrapper<OrOperation> > LogicalOrExpression;
+struct OrOperation {
+  LogicalOrExpression lhs;
+  LogicalAndExpression rhs;
 };
 
-class EmptyNode : public Node {};
+typedef LogicalOrExpression ConditionalExpression;
 
-typedef std::tr1::shared_ptr<Node> PNode;
-typedef std::vector<PNode> Nodes;
-
-class BlockNode : public Node {
- public:
-  BlockNode(Nodes statements)
-      : statements_(statements) {}
-
-  Nodes statements() const {
-    return statements_;
-  }
-
- private:
-  Nodes statements_;
+struct AssignmentOperation;
+typedef boost::variant<ConditionalExpression, boost::recursive_wrapper<AssignmentOperation> > AssignmentExpression;
+struct AssignmentOperation {
+  LhsExpression lhs;
+  std::string operator_;
+  AssignmentExpression rhs;
 };
 
-class ExpressionNode : public Node {
- public:
-  ExpressionNode(std::tr1::shared_ptr<Node> child, Nodes children)
-      : children_(children) {
-        children_.push_back(child);
-      }
+typedef std::vector<AssignmentExpression> Expression;
 
-  static std::tr1::shared_ptr<ExpressionNode> create(std::tr1::shared_ptr<Node> child, Nodes children) {
-    return std::tr1::shared_ptr<ExpressionNode>(new ExpressionNode(child, children));
-  }
-
- private:
-  Nodes children_;
+struct ExpressionHolder {
+  ExpressionHolder();
+  ExpressionHolder(Expression value)
+      : value(value) {}
+  const Expression value;
 };
 
-class ProgramNode : public Node {
- public:
-  ProgramNode(Nodes statements)
-      : statements_(statements) {}
+typedef boost::make_recursive_variant<std::vector<boost::recursive_variant_>, Expression>::type Statement_;
+typedef boost::optional<Statement_> Statement;
 
-  Nodes statements() const {
-    return statements_;
-  }
-
- private:
-  Nodes statements_;
-};
-
-class FunctionNode : public Node {};
+//typedef boost::variant<FunctionDeclaration, Statement> SourceElement;
+typedef Statement SourceElement;
+typedef std::vector<SourceElement> Program;
 
 } // namespace ast
 } // namespace kungjs
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::This,
+    (std::string, value)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Null,
+    (std::string, value)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Identifier,
+    (std::string, name)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::NewOperation,
+    (kungjs::ast::NewExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::PostfixOperation,
+    (kungjs::ast::LhsExpression, lhs)
+    (std::string, operator_)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::UnaryOperation,
+    (std::string, operator_)
+    (kungjs::ast::UnaryExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::MultiplicativeOperation,
+    (kungjs::ast::MultiplicativeExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::UnaryExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::AdditiveOperation,
+    (kungjs::ast::AdditiveExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::MultiplicativeExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ShiftOperation,
+    (kungjs::ast::ShiftExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::AdditiveExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::RelationalOperation,
+    (kungjs::ast::RelationalExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::ShiftExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::EqualityOperation,
+    (kungjs::ast::EqualityExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::RelationalExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::BitwiseAndOperation,
+    (kungjs::ast::BitwiseAndExpression, lhs)
+    (kungjs::ast::EqualityExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::BitwiseXorOperation,
+    (kungjs::ast::BitwiseXorExpression, lhs)
+    (kungjs::ast::BitwiseAndExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::BitwiseOrOperation,
+    (kungjs::ast::BitwiseOrExpression, lhs)
+    (kungjs::ast::BitwiseXorExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::AndOperation,
+    (kungjs::ast::LogicalAndExpression, lhs)
+    (kungjs::ast::BitwiseOrExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::OrOperation,
+    (kungjs::ast::LogicalOrExpression, lhs)
+    (kungjs::ast::LogicalAndExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::AssignmentOperation,
+    (kungjs::ast::LhsExpression, lhs)
+    (std::string, operator_)
+    (kungjs::ast::AssignmentExpression, rhs))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ExpressionHolder,
+    (kungjs::ast::Expression, value))
 
 #endif // KUNGJS_AST_H_
 
