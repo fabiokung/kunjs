@@ -13,7 +13,7 @@ include_directories(
 
 #add_library(grammar src/grammar.cc)
 
-cxx_executable(run-tests test gtest_main src/kungjs.cc src/parser.cc)
+cxx_executable(run-tests test gtest_main test/parser_test.cc src/parser.cc)
 
 enable_testing()
 add_test(all ${EXECUTABLE_OUTPUT_PATH}/run-tests)
