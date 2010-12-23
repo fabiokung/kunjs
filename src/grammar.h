@@ -40,7 +40,7 @@ struct error_handler_
     }
 };
 
-function<error_handler_> const error_handler = error_handler_();
+const function<error_handler_> error_handler = error_handler_();
 
 template <typename Iterator>
 struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
@@ -143,11 +143,9 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | string("^=")
         | string("|=");
 
-    conditional_expression %= logical_or_expression.alias();
-        //>> -(lit('?')
-             //>> assignment_expresssion
-             //>> ':'
-             //>> assignment_expression);
+    conditional_clauses %= '?' > assignment_expression > ':' > assignment_expression;
+    conditional_expression %= logical_or_expression
+        >> -(conditional_clauses);
 
     logical_or_expression %= logical_and_expression >> *("||" > logical_and_expression);
 
@@ -204,36 +202,31 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     postfix_expression %= lhs_expression >> -(!eol >> postfix_operator);
     postfix_operator %= string("++") | string("--");
 
-    lhs_expression %= new_expression.alias();
-        //| call_expression;
+    lhs_expression %= call_expression | new_expression;
 
-    //call_expression %=
-        //member_expression >> arguments
-        //| call_expression >> arguments;
-        //| call_expression >> '[' >> expression >> ']'
-        //| call_expression >> '.' >> identifier_name;
+    call_expression %= member_expression >> arguments
+        >> *(arguments | ('[' >> expression >> ']') | ('.' >> identifier_name));
 
-    //arguments %=
-        //'('
-        //>> -(assignment_expression
-             //>> *(',' >> assignment_expression))
-        //>> ')';
+    arguments %= lit('(') >> -(assignment_expression % ',') >> ')';
 
-    new_expression %= *lit("new") >> member_expression;
+    new_expression %= *string("new") >> member_expression;
 
-    member_expression %= primary_expression.alias();
-        //| function_expression
-        //| member_expression >> '[' >> expression >> ']'
-        //| member_expression >> '.' >> identifier_name
+    member_expression %= (primary_expression | function_expression)
+        >> *(('[' >> expression >> ']') | ('.' >> identifier_name));
         //| "new" >> member_expression >> arguments;
 
     primary_expression %=
         this_reference
         | identifier
         | literal 
+        | array_literal 
+        //| object_literal 
         | '(' >> expression >> ')';
 
-    this_reference %= string("this");
+    array_literal = '[' >> *lit(',') >> assignment_expression
+        >> *(+lit(',') >> assignment_expression) >> *lit(',') >> ']';
+
+    this_reference %= string("this")[_val = construct<ast::This>(_1)];
 
     // Lexical Grammar
     identifier %= (identifier_name - reserved_word);
@@ -271,7 +264,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | numeric_literal
         | string_literal;
 
-    null_literal %= string("null");
+    null_literal %= string("null")[_val = construct<ast::Null>(_1)];
 
     numeric_literal %= double_ | int_;
 
@@ -284,8 +277,8 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     BOOST_SPIRIT_DEBUG_NODE(program);
     BOOST_SPIRIT_DEBUG_NODE(source_element);
     BOOST_SPIRIT_DEBUG_NODE(function_declaration);
-    BOOST_SPIRIT_DEBUG_NODE(function_expression);
-    BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
+    //BOOST_SPIRIT_DEBUG_NODE(function_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
     BOOST_SPIRIT_DEBUG_NODE(function_body);
     BOOST_SPIRIT_DEBUG_NODE(source_element);
     BOOST_SPIRIT_DEBUG_NODE(statement);
@@ -307,10 +300,11 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     BOOST_SPIRIT_DEBUG_NODE(finally_block);
     BOOST_SPIRIT_DEBUG_NODE(throw_statement);
     BOOST_SPIRIT_DEBUG_NODE(try_statement);
-    BOOST_SPIRIT_DEBUG_NODE(expression);
-    BOOST_SPIRIT_DEBUG_NODE(assignment_expression);
-    BOOST_SPIRIT_DEBUG_NODE(assignment_operator);
-    BOOST_SPIRIT_DEBUG_NODE(conditional_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(expression);
+    //BOOST_SPIRIT_DEBUG_NODE(assignment_expression);
+    //BOST_SPIRIT_DEBUG_NODE(assignment_operator);
+    //BOOST_SPIRIT_DEBUG_NODE(conditional_clauses);
+    //BOOST_SPIRIT_DEBUG_NODE(conditional_expression);
     BOOST_SPIRIT_DEBUG_NODE(logical_or_expression);
     BOOST_SPIRIT_DEBUG_NODE(logical_and_expression);
     BOOST_SPIRIT_DEBUG_NODE(bitwise_or_expression);
@@ -330,11 +324,14 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     BOOST_SPIRIT_DEBUG_NODE(unary_operator);
     BOOST_SPIRIT_DEBUG_NODE(postfix_expression);
     BOOST_SPIRIT_DEBUG_NODE(postfix_operator);
-    BOOST_SPIRIT_DEBUG_NODE(lhs_expression);
-    BOOST_SPIRIT_DEBUG_NODE(new_expression);
-    BOOST_SPIRIT_DEBUG_NODE(member_expression);
-    BOOST_SPIRIT_DEBUG_NODE(primary_expression);
-    BOOST_SPIRIT_DEBUG_NODE(this_reference);
+    //BOOST_SPIRIT_DEBUG_NODE(lhs_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(call_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(arguments);
+    //BOOST_SPIRIT_DEBUG_NODE(new_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(member_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(primary_expression);
+    //BOOST_SPIRIT_DEBUG_NODE(array_literal);
+    //BOOST_SPIRIT_DEBUG_NODE(this_reference);
     BOOST_SPIRIT_DEBUG_NODE(identifier);
     BOOST_SPIRIT_DEBUG_NODE(identifier_name);
     BOOST_SPIRIT_DEBUG_NODE(identifier_start);
@@ -350,8 +347,8 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> program;
   qi::rule<Iterator, ascii::space_type> source_element;
   qi::rule<Iterator, ascii::space_type> function_declaration;
-  qi::rule<Iterator, ascii::space_type> function_expression;
-  qi::rule<Iterator, ascii::space_type> formal_parameter_list;
+  qi::rule<Iterator, ast::FunctionExpression(), ascii::space_type> function_expression;
+  qi::rule<Iterator, std::vector<std::string>(), ascii::space_type> formal_parameter_list;
   qi::rule<Iterator, ascii::space_type> function_body;
 
   qi::rule<Iterator, ascii::space_type> statement;
@@ -373,12 +370,13 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> throw_statement;
   qi::rule<Iterator, ascii::space_type> try_statement;
 
-  qi::rule<Iterator, ascii::space_type> expression;
+  qi::rule<Iterator, ast::Expression(), ascii::space_type> expression;
 
-  qi::rule<Iterator, ascii::space_type> assignment_expression;
+  qi::rule<Iterator, ast::AssignmentExpression(), ascii::space_type> assignment_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> assignment_operator;
 
-  qi::rule<Iterator, ascii::space_type> conditional_expression;
+  qi::rule<Iterator, ast::ConditionalClauses(), ascii::space_type> conditional_clauses;
+  qi::rule<Iterator, ast::ConditionalExpression(), ascii::space_type> conditional_expression;
   qi::rule<Iterator, ascii::space_type> logical_or_expression;
 
   qi::rule<Iterator, ascii::space_type> logical_and_expression;
@@ -410,24 +408,28 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> postfix_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> postfix_operator;
 
-  qi::rule<Iterator, ascii::space_type> lhs_expression;
+  qi::rule<Iterator, ast::LhsExpression(), ascii::space_type> lhs_expression;
 
-  qi::rule<Iterator, ascii::space_type> new_expression;
+  qi::rule<Iterator, ast::CallExpression(), ascii::space_type> call_expression;
+  qi::rule<Iterator, ast::Arguments(), ascii::space_type> arguments;
 
-  qi::rule<Iterator, ascii::space_type> member_expression;
-  qi::rule<Iterator, ascii::space_type> primary_expression;
-  qi::rule<Iterator, ascii::space_type> this_reference;
+  qi::rule<Iterator, ast::NewExpression(), ascii::space_type> new_expression;
 
-  qi::rule<Iterator, ascii::space_type> identifier;
+  qi::rule<Iterator, ast::MemberExpression(), ascii::space_type> member_expression;
+  qi::rule<Iterator, ast::PrimaryExpression(), ascii::space_type> primary_expression;
+  qi::rule<Iterator, ast::ArrayLiteral(), ascii::space_type> array_literal;
+  qi::rule<Iterator, ast::This(), ascii::space_type> this_reference;
+
+  qi::rule<Iterator, std::string(), ascii::space_type> identifier;
   qi::rule<Iterator, std::string(), ascii::space_type> identifier_name;
   qi::rule<Iterator, char(), ascii::space_type> identifier_start;
   qi::rule<Iterator, std::string(), ascii::space_type> reserved_word;
   qi::rule<Iterator, std::string(), ascii::space_type> keyword;
   qi::rule<Iterator, std::string(), ascii::space_type> future_reserved_word;
 
-  qi::rule<Iterator, ascii::space_type> literal;
-  qi::rule<Iterator, ascii::space_type> null_literal;
-  qi::rule<Iterator, ascii::space_type> numeric_literal;
+  qi::rule<Iterator, ast::Literal(), ascii::space_type> literal;
+  qi::rule<Iterator, ast::Null(), ascii::space_type> null_literal;
+  qi::rule<Iterator, ast::Numeric(), ascii::space_type> numeric_literal;
   qi::rule<Iterator, std::string(), ascii::space_type> string_literal;
 };
 

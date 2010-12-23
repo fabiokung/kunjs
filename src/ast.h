@@ -12,6 +12,12 @@
 
 namespace kungjs { namespace ast {
 
+struct FunctionExpression {
+  boost::optional<std::string> name;
+  std::vector<std::string> parameters;
+  // TODO body
+};
+
 struct Null {
   Null() {}
   Null(std::string value) : value(value) {}
@@ -19,30 +25,58 @@ struct Null {
 };
 
 typedef boost::variant<int, double> Numeric;
-typedef boost::variant<ast::Null, bool, double, std::string> Literal;
-struct Identifier {
-  Identifier() {}
-  Identifier(std::string value) : name(value) {}
-  std::string name;
-};
+typedef boost::variant<ast::Null, bool, Numeric, std::string> Literal;
+
 struct This {
   This() {}
   This(std::string value) : value(value) {}
   std::string value;
 };
-struct ExpressionHolder;
 
-typedef boost::variant<This, Identifier, Literal, boost::recursive_wrapper<ExpressionHolder> > PrimaryExpression;
+struct AssignmentExpression;
+typedef std::vector<AssignmentExpression> ArrayLiteral;
+typedef std::vector<AssignmentExpression> Expression;
 
-typedef PrimaryExpression MemberExpression;
+typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression;
 
-struct NewOperation;
-typedef boost::variant<MemberExpression, boost::recursive_wrapper<NewOperation> > NewExpression;
-struct NewOperation {
-  NewExpression rhs;
+struct ConditionalClauses;
+typedef boost::optional<boost::recursive_wrapper<ConditionalClauses> > ConditionalExpression;
+
+typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
+typedef boost::variant<Expression, std::string> MemberModifiers;
+struct MemberExpression {
+  MemberOptions member;
+  std::vector<MemberModifiers> modifiers;
 };
 
-typedef NewExpression LhsExpression;
+struct NewExpression {
+  std::vector<std::string> operators;
+  MemberExpression member;
+};
+
+typedef std::vector<AssignmentExpression> Arguments;
+
+typedef boost::variant<Arguments, Expression, std::string> CallModifiers;
+struct CallExpression {
+  MemberExpression target;
+  Arguments arguments;
+  std::vector<CallModifiers> modifiers;
+};
+
+typedef boost::variant<CallExpression, NewExpression> LhsExpression;
+
+struct AssignmentOperation {
+  LhsExpression lhs;
+  std::string operator_;
+};
+struct AssignmentExpression {
+  std::vector<AssignmentOperation> assignments;
+  ConditionalExpression rhs;
+};
+struct ConditionalClauses {
+  AssignmentExpression true_clause;
+  AssignmentExpression false_clause;
+};
 
 struct PostfixOperation;
 typedef boost::variant<LhsExpression, boost::recursive_wrapper<PostfixOperation> > PostfixExpression;
@@ -133,25 +167,6 @@ struct OrOperation {
   LogicalAndExpression rhs;
 };
 
-typedef LogicalOrExpression ConditionalExpression;
-
-struct AssignmentOperation;
-typedef boost::variant<ConditionalExpression, boost::recursive_wrapper<AssignmentOperation> > AssignmentExpression;
-struct AssignmentOperation {
-  LhsExpression lhs;
-  std::string operator_;
-  AssignmentExpression rhs;
-};
-
-typedef std::vector<AssignmentExpression> Expression;
-
-struct ExpressionHolder {
-  ExpressionHolder();
-  ExpressionHolder(Expression value)
-      : value(value) {}
-  const Expression value;
-};
-
 typedef boost::make_recursive_variant<std::vector<boost::recursive_variant_>, Expression>::type Statement_;
 typedef boost::optional<Statement_> Statement;
 
@@ -161,6 +176,12 @@ typedef std::vector<SourceElement> Program;
 
 } // namespace ast
 } // namespace kungjs
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::FunctionExpression,
+    (boost::optional<std::string>, name)
+    (std::vector<std::string>, parameters)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::This,
@@ -173,13 +194,22 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::Identifier,
-    (std::string, name)
+    kungjs::ast::MemberExpression,
+    (kungjs::ast::MemberOptions, member)
+    (std::vector<kungjs::ast::MemberModifiers>, modifiers)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::NewOperation,
-    (kungjs::ast::NewExpression, rhs)
+    kungjs::ast::NewExpression,
+    (std::vector<std::string>, operators)
+    (kungjs::ast::MemberExpression, member)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::CallExpression,
+    (kungjs::ast::MemberExpression, target)
+    (kungjs::ast::Arguments, arguments)
+    (std::vector<kungjs::ast::CallModifiers>, modifiers)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -254,14 +284,19 @@ BOOST_FUSION_ADAPT_STRUCT(
     (kungjs::ast::LogicalAndExpression, rhs))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::AssignmentOperation,
-    (kungjs::ast::LhsExpression, lhs)
-    (std::string, operator_)
-    (kungjs::ast::AssignmentExpression, rhs))
+    kungjs::ast::ConditionalClauses,
+    (kungjs::ast::AssignmentExpression, true_clause)
+    (kungjs::ast::AssignmentExpression, false_clause))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::ExpressionHolder,
-    (kungjs::ast::Expression, value))
+    kungjs::ast::AssignmentOperation,
+    (kungjs::ast::LhsExpression, lhs)
+    (std::string, operator_))
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::AssignmentExpression,
+    (std::vector<kungjs::ast::AssignmentOperation>, assignments)
+    (kungjs::ast::ConditionalExpression, rhs))
 
 #endif // KUNGJS_AST_H_
 
