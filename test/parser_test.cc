@@ -105,7 +105,7 @@ TEST(Parser, SimpleForLoop) {
 
 TEST(Parser, FunctionCall) {
   kungjs::Parser parser;
-  std::string code = "veryUseful();";
+  std::string code = "veryUseful(10, \"arg2\");";
   bool result = parser.parse(code);
   ASSERT_TRUE(result);
 }
