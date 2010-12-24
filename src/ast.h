@@ -298,5 +298,15 @@ BOOST_FUSION_ADAPT_STRUCT(
     (std::vector<kungjs::ast::AssignmentOperation>, assignments)
     (kungjs::ast::ConditionalExpression, rhs))
 
+
+namespace std {
+
+template <typename T>
+std::ostream& operator<<(std::ostream& stream, const boost::recursive_wrapper<T>& wrapper) {
+  stream << "recursive wrapper";
+  return stream;
+}
+
+}
 #endif // KUNGJS_AST_H_
 
