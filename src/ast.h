@@ -1,11 +1,8 @@
 #ifndef KUNGJS_AST_H_
 #define KUNGJS_AST_H_
 
-#include <boost/config/warning_disable.hpp>
-#include <boost/tr1/memory.hpp>
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
-#include <boost/spirit/include/phoenix_fusion.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <vector>
 #include <string>
@@ -78,18 +75,14 @@ struct ConditionalClauses {
   AssignmentExpression false_clause;
 };
 
-struct PostfixOperation;
-typedef boost::variant<LhsExpression, boost::recursive_wrapper<PostfixOperation> > PostfixExpression;
-struct PostfixOperation {
+struct PostfixExpression {
   LhsExpression lhs;
-  std::string operator_;
+  boost::optional<std::string> operator_;
 };
 
-struct UnaryOperation;
-typedef boost::variant<PostfixExpression, boost::recursive_wrapper<UnaryOperation> > UnaryExpression;
-struct UnaryOperation {
-  std::string operator_;
-  UnaryExpression rhs;
+struct UnaryExpression {
+  std::vector<std::string> indecrements;
+  PostfixExpression rhs;
 };
 
 struct MultiplicativeOperation;
@@ -213,15 +206,15 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::PostfixOperation,
+    kungjs::ast::PostfixExpression,
     (kungjs::ast::LhsExpression, lhs)
-    (std::string, operator_)
+    (boost::optional<std::string>, operator_)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::UnaryOperation,
-    (std::string, operator_)
-    (kungjs::ast::UnaryExpression, rhs)
+    kungjs::ast::UnaryExpression,
+    (std::vector<std::string>, indecrements)
+    (kungjs::ast::PostfixExpression, rhs)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(

@@ -2,8 +2,6 @@
 #define KUNGJS_PARSER_H_
 
 #include "ast.h"
-
-#include <boost/tr1/memory.hpp>
 #include <string>
 
 namespace kungjs {

@@ -3,12 +3,9 @@
 
 #define BOOST_SPIRIT_DEBUG
 #include "ast.h"
-#include <boost/tr1/memory.hpp>
-#include <boost/spirit/home/phoenix.hpp>
 #include <boost/spirit/home/phoenix/object/construct.hpp>
+#include <boost/spirit/home/phoenix/operator/self.hpp>
 #include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix_core.hpp>
-#include <boost/spirit/include/phoenix_statement.hpp>
 #include <vector>
 #include <string>
 
@@ -19,25 +16,20 @@ namespace ascii = boost::spirit::ascii;
 
 using boost::phoenix::function;
 
-struct error_handler_
-{
-    template <typename, typename, typename>
-    struct result { typedef void type; };
+struct error_handler_ {
+  template <typename, typename, typename>
+  struct result { typedef void type; };
 
-    template <typename Iterator>
-    void operator()(
-        qi::info const& what
-      , Iterator err_pos, Iterator last) const
-    {
-        std::cout
-            << "Error! Expecting "
-            << what                         // what failed?
-            << " here: \""
-            << std::string(err_pos, last)   // iterators to error-pos, end
-            << "\""
-            << std::endl
-        ;
-    }
+  template <typename Iterator>
+  void operator()(qi::info const& what, Iterator err_pos, Iterator last) const {
+    std::cout
+        << "Error! Expecting "
+        << what
+        << " here: \""
+        << std::string(err_pos, last)
+        << "\""
+        << std::endl;
+  }
 };
 
 const function<error_handler_> error_handler = error_handler_();
@@ -188,7 +180,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | string("/")
         | string("%");
 
-    unary_expression %= *unary_operator >> postfix_expression;
+    unary_expression %= (*unary_operator) >> postfix_expression;
     unary_operator %= string("delete")
         | string("void")
         | string("typeof")
@@ -277,8 +269,8 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     BOOST_SPIRIT_DEBUG_NODE(program);
     BOOST_SPIRIT_DEBUG_NODE(source_element);
     BOOST_SPIRIT_DEBUG_NODE(function_declaration);
-    //BOOST_SPIRIT_DEBUG_NODE(function_expression);
-    //BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
+    BOOST_SPIRIT_DEBUG_NODE(function_expression);
+    BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
     BOOST_SPIRIT_DEBUG_NODE(function_body);
     BOOST_SPIRIT_DEBUG_NODE(source_element);
     BOOST_SPIRIT_DEBUG_NODE(statement);
@@ -405,7 +397,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> unary_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> unary_operator;
 
-  qi::rule<Iterator, ascii::space_type> postfix_expression;
+  qi::rule<Iterator, ast::PostfixExpression, ascii::space_type> postfix_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> postfix_operator;
 
   qi::rule<Iterator, ast::LhsExpression(), ascii::space_type> lhs_expression;

@@ -2,7 +2,6 @@
 #include "ast.h"
 #include "grammar.h"
 
-#include <boost/tr1/memory.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <string>
 
