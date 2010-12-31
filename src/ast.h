@@ -17,7 +17,7 @@ struct FunctionExpression {
 
 struct Null {
   Null() {}
-  Null(std::string value) : value(value) {}
+  explicit Null(std::string value) : value(value) {}
   std::string value;
 };
 
@@ -26,13 +26,13 @@ typedef boost::variant<ast::Null, bool, Numeric, std::string> Literal;
 
 struct This {
   This() {}
-  This(std::string value) : value(value) {}
+  explicit This(std::string value) : value(value) {}
   std::string value;
 };
 
 struct AssignmentExpression;
-typedef std::vector<AssignmentExpression> ArrayLiteral;
 typedef std::vector<AssignmentExpression> Expression;
+typedef std::vector<AssignmentExpression> ArrayLiteral;
 
 typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression;
 
@@ -157,6 +157,18 @@ struct AssignmentOperation {
 struct AssignmentExpression {
   std::vector<AssignmentOperation> assignments;
   ConditionalExpression rhs;
+};
+
+struct ThrowStatement {
+  ThrowStatement() {}
+  explicit ThrowStatement(Expression expression)
+      : expression(expression) {}
+  Expression expression;
+};
+
+struct ReturnStatement {
+  std::string keyword;
+  boost::optional<Expression> expression;
 };
 
 typedef boost::make_recursive_variant<std::vector<boost::recursive_variant_>, Expression>::type Statement_;
@@ -321,12 +333,25 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::AssignmentOperation,
     (kungjs::ast::LhsExpression, lhs)
-    (std::string, operator_))
+    (std::string, operator_)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::AssignmentExpression,
     (std::vector<kungjs::ast::AssignmentOperation>, assignments)
-    (kungjs::ast::ConditionalExpression, rhs))
+    (kungjs::ast::ConditionalExpression, rhs)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ThrowStatement,
+    (kungjs::ast::Expression, expression)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ReturnStatement,
+    (std::string, keyword)
+    (boost::optional<kungjs::ast::Expression>, expression)
+)
 
 
 namespace std {

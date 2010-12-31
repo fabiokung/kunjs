@@ -102,7 +102,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
     continue_statement %= "continue" > !eol > -identifier > ";";
     break_statement %= "break" > !eol > -identifier > ";";
-    return_statement %= "return" > !eol > -expression > ";";
+    return_statement %= string("return") > !eol > -expression > ";";
 
     with_statement %= lit("with") > "(" > expression > ")" > statement;
 
@@ -112,7 +112,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
     labelled_statement %= identifier >> ":" > statement;
 
-    throw_statement %= "throw" > !eol > expression > ";";
+    throw_statement %= "throw" > !eol > expression[_val = construct<ast::ThrowStatement>(_1)] > ";";
 
     try_statement %= lit("try") >> "{" >> *statement >> "}" >> (catch_block || finally_block);
     catch_block %= lit("catch") >> "(" >> identifier >> ")" >> "{" >> *statement >> "}";
@@ -351,7 +351,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> iteration_statement;
   qi::rule<Iterator, ascii::space_type> continue_statement;
   qi::rule<Iterator, ascii::space_type> break_statement;
-  qi::rule<Iterator, ascii::space_type> return_statement;
+  qi::rule<Iterator, ast::ReturnStatement(), ascii::space_type> return_statement;
   qi::rule<Iterator, ascii::space_type> with_statement;
   qi::rule<Iterator, ascii::space_type> labelled_statement;
   qi::rule<Iterator, ascii::space_type> switch_statement;
@@ -359,7 +359,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> default_clause;
   qi::rule<Iterator, ascii::space_type> catch_block;
   qi::rule<Iterator, ascii::space_type> finally_block;
-  qi::rule<Iterator, ascii::space_type> throw_statement;
+  qi::rule<Iterator, ast::ThrowStatement(), ascii::space_type> throw_statement;
   qi::rule<Iterator, ascii::space_type> try_statement;
 
   qi::rule<Iterator, ast::Expression(), ascii::space_type> expression;
