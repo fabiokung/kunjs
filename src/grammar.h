@@ -180,7 +180,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | string("/")
         | string("%");
 
-    unary_expression %= (*unary_operator) >> postfix_expression;
+    unary_expression %= ((*unary_operator) >> postfix_expression);
     unary_operator %= string("delete")
         | string("void")
         | string("typeof")
@@ -369,35 +369,32 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
   qi::rule<Iterator, ast::ConditionalClauses(), ascii::space_type> conditional_clauses;
   qi::rule<Iterator, ast::ConditionalExpression(), ascii::space_type> conditional_expression;
-  qi::rule<Iterator, ascii::space_type> logical_or_expression;
 
-  qi::rule<Iterator, ascii::space_type> logical_and_expression;
+  qi::rule<Iterator, ast::LogicalOrExpression(), ascii::space_type> logical_or_expression;
+  qi::rule<Iterator, ast::LogicalAndExpression(), ascii::space_type> logical_and_expression;
+  qi::rule<Iterator, ast::BitwiseOrExpression(), ascii::space_type> bitwise_or_expression;
+  qi::rule<Iterator, ast::BitwiseXorExpression(), ascii::space_type> bitwise_xor_expression;
+  qi::rule<Iterator, ast::BitwiseAndExpression(), ascii::space_type> bitwise_and_expression;
 
-  qi::rule<Iterator, ascii::space_type> bitwise_or_expression;
-
-  qi::rule<Iterator, ascii::space_type> bitwise_xor_expression;
-
-  qi::rule<Iterator, ascii::space_type> bitwise_and_expression;
-
-  qi::rule<Iterator, ascii::space_type> equality_expression;
+  qi::rule<Iterator, ast::EqualityExpression(), ascii::space_type> equality_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> equality_operator;
 
-  qi::rule<Iterator, ascii::space_type> relational_expression;
+  qi::rule<Iterator, ast::RelationalExpression(), ascii::space_type> relational_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> relational_operator;
 
-  qi::rule<Iterator, ascii::space_type> shift_expression;
+  qi::rule<Iterator, ast::ShiftExpression(), ascii::space_type> shift_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> shift_operator;
 
-  qi::rule<Iterator, ascii::space_type> additive_expression;
+  qi::rule<Iterator, ast::AdditiveExpression(), ascii::space_type> additive_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> additive_operator;
 
-  qi::rule<Iterator, ascii::space_type> multiplicative_expression;
+  qi::rule<Iterator, ast::MultiplicativeExpression(), ascii::space_type> multiplicative_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> multiplicative_operator;
 
-  qi::rule<Iterator, ascii::space_type> unary_expression;
+  qi::rule<Iterator, ast::UnaryExpression(), ascii::space_type> unary_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> unary_operator;
 
-  qi::rule<Iterator, ast::PostfixExpression, ascii::space_type> postfix_expression;
+  qi::rule<Iterator, ast::PostfixExpression(), ascii::space_type> postfix_expression;
   qi::rule<Iterator, std::string(), ascii::space_type> postfix_operator;
 
   qi::rule<Iterator, ast::LhsExpression(), ascii::space_type> lhs_expression;

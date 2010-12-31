@@ -36,9 +36,6 @@ typedef std::vector<AssignmentExpression> Expression;
 
 typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression;
 
-struct ConditionalClauses;
-typedef boost::optional<boost::recursive_wrapper<ConditionalClauses> > ConditionalExpression;
-
 typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
 typedef boost::variant<Expression, std::string> MemberModifiers;
 struct MemberExpression {
@@ -62,19 +59,6 @@ struct CallExpression {
 
 typedef boost::variant<CallExpression, NewExpression> LhsExpression;
 
-struct AssignmentOperation {
-  LhsExpression lhs;
-  std::string operator_;
-};
-struct AssignmentExpression {
-  std::vector<AssignmentOperation> assignments;
-  ConditionalExpression rhs;
-};
-struct ConditionalClauses {
-  AssignmentExpression true_clause;
-  AssignmentExpression false_clause;
-};
-
 struct PostfixExpression {
   LhsExpression lhs;
   boost::optional<std::string> operator_;
@@ -85,79 +69,94 @@ struct UnaryExpression {
   PostfixExpression rhs;
 };
 
-struct MultiplicativeOperation;
-typedef boost::variant<UnaryExpression, boost::recursive_wrapper<MultiplicativeOperation> > MultiplicativeExpression;
 struct MultiplicativeOperation {
-  MultiplicativeExpression lhs;
   std::string operator_;
   UnaryExpression rhs;
 };
+struct MultiplicativeExpression {
+  UnaryExpression lhs;
+  std::vector<MultiplicativeOperation> operations;
+};
 
-struct AdditiveOperation;
-typedef boost::variant<MultiplicativeExpression, boost::recursive_wrapper<AdditiveOperation> > AdditiveExpression;
 struct AdditiveOperation {
-  AdditiveExpression lhs;
   std::string operator_;
   MultiplicativeExpression rhs;
 };
+struct AdditiveExpression {
+  MultiplicativeExpression lhs;
+  std::vector<AdditiveOperation> operations;
+};
 
-struct ShiftOperation;
-typedef boost::variant<AdditiveExpression, boost::recursive_wrapper<ShiftOperation> > ShiftExpression;
-struct ShiftOperation {
-  ShiftExpression lhs;
+struct ShiftOperation{
   std::string operator_;
   AdditiveExpression rhs;
 };
+struct ShiftExpression {
+  AdditiveExpression lhs;
+  std::vector<ShiftOperation> operations;
+};
 
-struct RelationalOperation;
-typedef boost::variant<ShiftExpression, boost::recursive_wrapper<RelationalOperation> > RelationalExpression;
 struct RelationalOperation {
-  RelationalExpression lhs;
   std::string operator_;
   ShiftExpression rhs;
 };
+struct RelationalExpression {
+  ShiftExpression lhs;
+  std::vector<RelationalOperation> operations;
+};
 
-struct EqualityOperation;
-typedef boost::variant<RelationalExpression, boost::recursive_wrapper<EqualityOperation> > EqualityExpression;
 struct EqualityOperation {
-  EqualityExpression lhs;
   std::string operator_;
   RelationalExpression rhs;
 };
+struct EqualityExpression {
+  RelationalExpression lhs;
+  std::vector<EqualityOperation> operations;
+};
 
-struct BitwiseAndOperation;
-typedef boost::variant<EqualityExpression, boost::recursive_wrapper<BitwiseAndOperation> > BitwiseAndExpression;
-struct BitwiseAndOperation {
+struct BitwiseAndExpression {
+  EqualityExpression lhs;
+  std::vector<EqualityExpression> operations;
+};
+
+struct BitwiseXorExpression {
   BitwiseAndExpression lhs;
-  EqualityExpression rhs;
+  std::vector<BitwiseAndExpression> operations;
 };
 
-struct BitwiseXorOperation;
-typedef boost::variant<BitwiseAndExpression, boost::recursive_wrapper<BitwiseXorOperation> > BitwiseXorExpression;
-struct BitwiseXorOperation {
+struct BitwiseOrExpression {
   BitwiseXorExpression lhs;
-  BitwiseAndExpression rhs;
+  std::vector<BitwiseXorExpression> operations;
 };
 
-struct BitwiseOrOperation;
-typedef boost::variant<BitwiseXorExpression, boost::recursive_wrapper<BitwiseOrOperation> > BitwiseOrExpression;
-struct BitwiseOrOperation {
+struct LogicalAndExpression {
   BitwiseOrExpression lhs;
-  BitwiseXorExpression rhs;
+  std::vector<BitwiseOrExpression> operations;
 };
 
-struct AndOperation;
-typedef boost::variant<BitwiseOrExpression, boost::recursive_wrapper<AndOperation> > LogicalAndExpression;
-struct AndOperation {
+struct LogicalOrExpression {
   LogicalAndExpression lhs;
-  BitwiseOrExpression rhs;
+  std::vector<LogicalAndExpression> operations;
 };
 
-struct OrOperation;
-typedef boost::variant<LogicalAndExpression, boost::recursive_wrapper<OrOperation> > LogicalOrExpression;
-struct OrOperation {
+struct ConditionalClauses {
+  boost::recursive_wrapper<AssignmentExpression> true_clause;
+  boost::recursive_wrapper<AssignmentExpression> false_clause;
+};
+
+struct ConditionalExpression {
   LogicalOrExpression lhs;
-  LogicalAndExpression rhs;
+  boost::optional<ConditionalClauses> conditional_clauses;
+};
+
+struct AssignmentOperation {
+  LhsExpression lhs;
+  std::string operator_;
+};
+
+struct AssignmentExpression {
+  std::vector<AssignmentOperation> assignments;
+  ConditionalExpression rhs;
 };
 
 typedef boost::make_recursive_variant<std::vector<boost::recursive_variant_>, Expression>::type Statement_;
@@ -218,68 +217,106 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::MultiplicativeExpression,
+    (kungjs::ast::UnaryExpression, lhs)
+    (std::vector<kungjs::ast::MultiplicativeOperation>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::MultiplicativeOperation,
-    (kungjs::ast::MultiplicativeExpression, lhs)
     (std::string, operator_)
     (kungjs::ast::UnaryExpression, rhs)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::AdditiveExpression,
+    (kungjs::ast::MultiplicativeExpression, lhs)
+    (std::vector<kungjs::ast::AdditiveOperation>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::AdditiveOperation,
-    (kungjs::ast::AdditiveExpression, lhs)
     (std::string, operator_)
     (kungjs::ast::MultiplicativeExpression, rhs)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ShiftExpression,
+    (kungjs::ast::AdditiveExpression, lhs)
+    (std::vector<kungjs::ast::ShiftOperation>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::ShiftOperation,
-    (kungjs::ast::ShiftExpression, lhs)
     (std::string, operator_)
     (kungjs::ast::AdditiveExpression, rhs)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::RelationalExpression,
+    (kungjs::ast::ShiftExpression, lhs)
+    (std::vector<kungjs::ast::RelationalOperation>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::RelationalOperation,
-    (kungjs::ast::RelationalExpression, lhs)
     (std::string, operator_)
     (kungjs::ast::ShiftExpression, rhs)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::EqualityExpression,
+    (kungjs::ast::RelationalExpression, lhs)
+    (std::vector<kungjs::ast::EqualityOperation>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::EqualityOperation,
-    (kungjs::ast::EqualityExpression, lhs)
     (std::string, operator_)
-    (kungjs::ast::RelationalExpression, rhs))
+    (kungjs::ast::RelationalExpression, rhs)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::BitwiseAndOperation,
+    kungjs::ast::BitwiseAndExpression,
+    (kungjs::ast::EqualityExpression, lhs)
+    (std::vector<kungjs::ast::EqualityExpression>, operations)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::BitwiseXorExpression,
     (kungjs::ast::BitwiseAndExpression, lhs)
-    (kungjs::ast::EqualityExpression, rhs))
+    (std::vector<kungjs::ast::BitwiseAndExpression>, operations)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::BitwiseXorOperation,
+    kungjs::ast::BitwiseOrExpression,
     (kungjs::ast::BitwiseXorExpression, lhs)
-    (kungjs::ast::BitwiseAndExpression, rhs))
+    (std::vector<kungjs::ast::BitwiseXorExpression>, operations)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::BitwiseOrOperation,
+    kungjs::ast::LogicalAndExpression,
     (kungjs::ast::BitwiseOrExpression, lhs)
-    (kungjs::ast::BitwiseXorExpression, rhs))
+    (std::vector<kungjs::ast::BitwiseOrExpression>, operations)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::AndOperation,
+    kungjs::ast::LogicalOrExpression,
     (kungjs::ast::LogicalAndExpression, lhs)
-    (kungjs::ast::BitwiseOrExpression, rhs))
-
-BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::OrOperation,
-    (kungjs::ast::LogicalOrExpression, lhs)
-    (kungjs::ast::LogicalAndExpression, rhs))
+    (std::vector<kungjs::ast::LogicalAndExpression>, operations)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::ConditionalClauses,
-    (kungjs::ast::AssignmentExpression, true_clause)
-    (kungjs::ast::AssignmentExpression, false_clause))
+    (boost::recursive_wrapper<kungjs::ast::AssignmentExpression>, true_clause)
+    (boost::recursive_wrapper<kungjs::ast::AssignmentExpression>, false_clause)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::ConditionalExpression,
+    (kungjs::ast::LogicalOrExpression, lhs)
+    (boost::optional<kungjs::ast::ConditionalClauses>, conditional_clauses)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
     kungjs::ast::AssignmentOperation,
