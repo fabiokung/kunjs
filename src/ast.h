@@ -159,20 +159,83 @@ struct AssignmentExpression {
   ConditionalExpression rhs;
 };
 
-struct ThrowStatement {
-  ThrowStatement() {}
-  explicit ThrowStatement(Expression expression)
+struct VarDeclaration {
+  std::string name;
+  boost::optional<AssignmentExpression> assignment;
+};
+
+typedef std::vector<VarDeclaration> Var;
+
+struct If;
+
+struct Continue {
+  boost::optional<std::string> label;
+};
+
+struct Break {
+  boost::optional<std::string> label;
+};
+
+struct Return {
+  boost::optional<Expression> expression;
+};
+
+struct With;
+
+struct LabelledStatement;
+
+struct Throw {
+  Throw() {}
+  explicit Throw(Expression expression)
       : expression(expression) {}
   Expression expression;
 };
 
-struct ReturnStatement {
-  std::string keyword;
-  boost::optional<Expression> expression;
+struct Try;
+
+typedef boost::make_recursive_variant<
+          Expression,
+          Var,
+          boost::recursive_wrapper<If>,
+          Continue,
+          Break,
+          Return,
+          boost::recursive_wrapper<With>,
+          boost::recursive_wrapper<LabelledStatement>,
+          Throw,
+          boost::recursive_wrapper<Try>,
+          std::string,
+          std::vector<boost::recursive_variant_>
+        >::type Statement;
+
+struct If {
+  Expression condition;
+  Statement true_clause;
+  boost::optional<Statement> false_clause;
 };
 
-typedef boost::make_recursive_variant<std::vector<boost::recursive_variant_>, Expression>::type Statement_;
-typedef boost::optional<Statement_> Statement;
+struct With {
+  Expression expression;
+  Statement statement;
+};
+
+struct LabelledStatement {
+  std::string label;
+  Statement statement;
+};
+
+typedef std::vector<Statement> Finally;
+
+struct Catch {
+  std::string exception_name;
+  std::vector<Statement> statements;
+};
+
+struct Try {
+  std::vector<Statement> statements;
+  boost::optional<Catch> catch_block;
+  boost::optional<Finally> finally_block;
+};
 
 //typedef boost::variant<FunctionDeclaration, Statement> SourceElement;
 typedef Statement SourceElement;
@@ -343,14 +406,61 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::ThrowStatement,
+    kungjs::ast::Catch,
+    (std::string, exception_name)
+    (std::vector<kungjs::ast::Statement>, statements)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Try,
+    (std::vector<kungjs::ast::Statement>, statements)
+    (boost::optional<kungjs::ast::Catch>, catch_block)
+    (boost::optional<kungjs::ast::Finally>, finally_block)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Throw,
     (kungjs::ast::Expression, expression)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kungjs::ast::ReturnStatement,
-    (std::string, keyword)
+    kungjs::ast::With,
+    (kungjs::ast::Expression, expression)
+    (kungjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::LabelledStatement,
+    (std::string, label)
+    (kungjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Return,
     (boost::optional<kungjs::ast::Expression>, expression)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Break,
+    (boost::optional<std::string>, label)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::Continue,
+    (boost::optional<std::string>, label)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::If,
+    (kungjs::ast::Expression, condition)
+    (kungjs::ast::Statement, true_clause)
+    (boost::optional<kungjs::ast::Statement>, false_clause)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kungjs::ast::VarDeclaration,
+    (std::string, name)
+    (boost::optional<kungjs::ast::AssignmentExpression>, assignment)
 )
 
 
@@ -358,7 +468,7 @@ namespace std {
 
 template <typename T>
 std::ostream& operator<<(std::ostream& stream, const boost::recursive_wrapper<T>& wrapper) {
-  stream << "recursive wrapper";
+  stream << "recursive wrapper" << "\n";
   return stream;
 }
 

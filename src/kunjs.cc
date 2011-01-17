@@ -1,9 +1,9 @@
-#include "kungjs.h"
+#include "kunjs.h"
 #include "grammar.h"
 
 #include <iostream>
 
-namespace kungjs {
+namespace kunjs {
 
 std::string Runner::run(std::string code) {
   std::cout << "Running: " << code << "\n";

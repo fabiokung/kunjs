@@ -1,9 +1,9 @@
-#ifndef KUNGJS_KUNGJS_H_
-#define KUNGJS_KUNGJS_H_
+#ifndef KUNJS_KUNJS_H_
+#define KUNJS_KUNJS_H_
 
 #include <string>
 
-namespace kungjs {
+namespace kunjs {
 
 class Runner {
  public:
@@ -12,4 +12,4 @@ class Runner {
 
 }
 
-#endif // KUNGJS_KUNGJS_H_
+#endif // KUNJS_KUNJS_H_

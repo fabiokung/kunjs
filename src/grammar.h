@@ -69,26 +69,26 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     function_body %= *source_element;
 
     statement %=
-        "{" > *statement > "}"
+        ! lit("function") >> expression[_val = _1] >> ";"
         | variable_statement
-        | empty_statement
-        | !(lit("function")) >> expression > ";"
+        //| empty_statement
         | if_statement
-        | iteration_statement
+        //| iteration_statement
         | continue_statement
         | break_statement
         | return_statement
         | with_statement
         | labelled_statement
-        | switch_statement
+        //| switch_statement
         | throw_statement
         | try_statement
-        | lit("debugger") >> ";";
+        | string("debugger") > ";"
+        | "{" >> *statement >> "}";
     
-    variable_statement %= "var" >> (variable_declaration % ",") >> ";";
+    variable_statement %= lit("var") >> (variable_declaration % ",") >> ";";
     variable_declaration %= identifier >> -("=" >> assignment_expression);
 
-    empty_statement %= char_(';');
+    empty_statement %= lit(';');
 
     if_statement %= lit("if") >> "(" >> expression >> ")" >> statement >> -(lit("else") >> statement);
 
@@ -100,9 +100,9 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | lit("for") >> "(" >> lhs_expression >> "in" >> expression >> ")" >> statement
         | lit("for") >> "(" >> "var" >> variable_declaration >> "in" >> expression >> ")" >> statement;
 
-    continue_statement %= "continue" > !eol > -identifier > ";";
-    break_statement %= "break" > !eol > -identifier > ";";
-    return_statement %= string("return") > !eol > -expression > ";";
+    continue_statement %= lit("continue") > !eol > -identifier > ";";
+    break_statement %= lit("break") > !eol > -identifier > ";";
+    return_statement %= lit("return") > !eol > -expression > ";";
 
     with_statement %= lit("with") > "(" > expression > ")" > statement;
 
@@ -112,7 +112,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
     labelled_statement %= identifier >> ":" > statement;
 
-    throw_statement %= "throw" > !eol > expression[_val = construct<ast::ThrowStatement>(_1)] > ";";
+    throw_statement %= lit("throw") > !eol > expression[_val = construct<ast::Throw>(_1)] > ";";
 
     try_statement %= lit("try") >> "{" >> *statement >> "}" >> (catch_block || finally_block);
     catch_block %= lit("catch") >> "(" >> identifier >> ")" >> "{" >> *statement >> "}";
@@ -122,7 +122,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
     assignment_expression %= *(lhs_expression >> assignment_operator) >> conditional_expression;
     assignment_operator %=
-        string("=")
+        !lit("==") >> string("=")
         | string("*=")
         | string("/=")
         | string("%=")
@@ -221,9 +221,9 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
     this_reference %= string("this")[_val = construct<ast::This>(_1)];
 
     // Lexical Grammar
-    identifier %= (identifier_name - reserved_word);
+    identifier %= !reserved_word >> identifier_name;
 
-    // FIXME: unicode characters
+    // FIXME: unicode characters and connectors
     identifier_name %= identifier_start >> *alnum;
 
     identifier_start %= alpha | char_('$') | char_('_');
@@ -235,20 +235,16 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
         | string("true")
         | string("false");
 
-    keyword %=
-        string("break") | string("do") | string("case") | string("else")
-        | string("catch") | string( "finally") | string("continue") | string("for")
-        | string("debugger") | string("function") | string( "default") | string("if")
-        | string("delete") | string("in") | string("instanceof") | string("new")
-        | string( "return") | string("switch") | string("this") | string("throw")
-        | string("try") | string("typeof") | string( "var") | string("void")
-        | string("while") | string( "with");
+    keyword %= keywords >> !alnum;
+    keywords = "break", "do", "case", "else", "catch",  "finally", "continue",
+               "for", "debugger", "function",  "default", "if", "delete", "in",
+               "instanceof", "new",  "return", "switch", "this", "throw", "try",
+               "typeof",  "var", "void", "while",  "with";
 
-    future_reserved_word %=
-        string("class") | string("enum") | string("const") | string("export")
-        | string("implements") | string("let") | string("interface") | string("package")
-        | string("yield") | string("extends") | string("import") | string("private")
-        | string("protected") | string("super") | string("public") |string( "static");
+    future_reserved_word %= future_reserved_words >> !alnum;
+    future_reserved_words = "class", "enum", "const", "export", "implements", "let",
+                           "interface", "package", "yield", "extends", "import",
+                           "private", "protected", "super", "public", "static";
 
     literal %=
         null_literal
@@ -343,24 +339,24 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, std::vector<std::string>(), ascii::space_type> formal_parameter_list;
   qi::rule<Iterator, ascii::space_type> function_body;
 
-  qi::rule<Iterator, ascii::space_type> statement;
-  qi::rule<Iterator, ascii::space_type> variable_statement;
-  qi::rule<Iterator, ascii::space_type> variable_declaration;
+  qi::rule<Iterator, ast::Statement(), ascii::space_type> statement;
+  qi::rule<Iterator, ast::Var(), ascii::space_type> variable_statement;
+  qi::rule<Iterator, ast::VarDeclaration(), ascii::space_type> variable_declaration;
   qi::rule<Iterator, ascii::space_type> empty_statement;
-  qi::rule<Iterator, ascii::space_type> if_statement;
+  qi::rule<Iterator, ast::If(), ascii::space_type> if_statement;
   qi::rule<Iterator, ascii::space_type> iteration_statement;
-  qi::rule<Iterator, ascii::space_type> continue_statement;
-  qi::rule<Iterator, ascii::space_type> break_statement;
-  qi::rule<Iterator, ast::ReturnStatement(), ascii::space_type> return_statement;
-  qi::rule<Iterator, ascii::space_type> with_statement;
-  qi::rule<Iterator, ascii::space_type> labelled_statement;
+  qi::rule<Iterator, ast::Continue(), ascii::space_type> continue_statement;
+  qi::rule<Iterator, ast::Break(), ascii::space_type> break_statement;
+  qi::rule<Iterator, ast::Return(), ascii::space_type> return_statement;
+  qi::rule<Iterator, ast::With(), ascii::space_type> with_statement;
+  qi::rule<Iterator, ast::LabelledStatement(), ascii::space_type> labelled_statement;
   qi::rule<Iterator, ascii::space_type> switch_statement;
   qi::rule<Iterator, ascii::space_type> case_clause;
   qi::rule<Iterator, ascii::space_type> default_clause;
-  qi::rule<Iterator, ascii::space_type> catch_block;
-  qi::rule<Iterator, ascii::space_type> finally_block;
-  qi::rule<Iterator, ast::ThrowStatement(), ascii::space_type> throw_statement;
-  qi::rule<Iterator, ascii::space_type> try_statement;
+  qi::rule<Iterator, ast::Throw(), ascii::space_type> throw_statement;
+  qi::rule<Iterator, ast::Try(), ascii::space_type> try_statement;
+  qi::rule<Iterator, ast::Catch(), ascii::space_type> catch_block;
+  qi::rule<Iterator, ast::Finally(), ascii::space_type> finally_block;
 
   qi::rule<Iterator, ast::Expression(), ascii::space_type> expression;
 
@@ -413,8 +409,10 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, std::string(), ascii::space_type> identifier_name;
   qi::rule<Iterator, char(), ascii::space_type> identifier_start;
   qi::rule<Iterator, std::string(), ascii::space_type> reserved_word;
-  qi::rule<Iterator, std::string(), ascii::space_type> keyword;
-  qi::rule<Iterator, std::string(), ascii::space_type> future_reserved_word;
+  qi::rule<Iterator, std::string()> keyword;
+  qi::symbols<char> keywords;
+  qi::rule<Iterator, std::string()> future_reserved_word;
+  qi::symbols<char> future_reserved_words;
 
   qi::rule<Iterator, ast::Literal(), ascii::space_type> literal;
   qi::rule<Iterator, ast::Null(), ascii::space_type> null_literal;

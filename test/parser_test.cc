@@ -95,7 +95,7 @@ TEST(Parser, MultipleAssignment) {
 
 TEST(Parser, SimpleForLoop) {
   kungjs::Parser parser;
-  std::string code = 
+  std::string code =
       "for(var i=0; i < 100; i++) {"
       "  100 - i;"
       "}";
@@ -115,6 +115,123 @@ TEST(Parser, FunctionDefinition) {
   std::string code =
       "function veryUseful(arg1, arg2) {"
       "  return arg1 * arg2;"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, If) {
+  kungjs::Parser parser;
+  std::string code =
+      "if(n < 100) {"
+      "  result = 'big';"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, IfElse) {
+  kungjs::Parser parser;
+  std::string code =
+      "if (t == 'some text') {"
+      "  result -= 10;"
+      "} else {"
+      "  result += 20;"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+
+TEST(Parser, SimpleWith) {
+  kungjs::Parser parser;
+  std::string code =
+      "with (self) {"
+      "  call(10);"
+      "  store('text');"
+      "  someAttribute = value;"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, WithDocument) {
+  kungjs::Parser parser;
+  std::string code =
+      "with (document) {"
+      "  write('the text');"
+      "  write('more text');"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, SimpleLabel) {
+  kungjs::Parser parser;
+  std::string code = "theLabel: var n = x + 10;";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, LabelledFor) {
+  kungjs::Parser parser;
+  std::string code =
+      "start: for(var i=0; i < 100; i++) {"
+      "  break start;"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, Try) {
+  kungjs::Parser parser;
+  std::string code =
+      "try {"
+      "  some = 'text';"
+      "  doSomethin();"
+      "  someOne.action(true)"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, TryCatch) {
+  kungjs::Parser parser;
+  std::string code =
+      "try {"
+      "  some = giveMeAnError('cfg');"
+      "  neverExecuted();"
+      "} catch (error) {"
+      "  print(error.getMessage());"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, TryFinally) {
+  kungjs::Parser parser;
+  std::string code =
+      "try {"
+      "  connection.open();"
+      "  doAction();"
+      "} finally {"
+      "  connection.close();"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, TryCatchFinally) {
+  kungjs::Parser parser;
+  std::string code =
+      "try {"
+      "  connection.begin();"
+      "  doAction();"
+      "  connection.commit();"
+      "} catch (error) {"
+      "  connection.rollback(error);"
+      "} finally {"
+      "  connection.close();"
       "}";
   bool result = parser.parse(code);
   ASSERT_TRUE(result);
