@@ -192,7 +192,7 @@ TEST(Parser, Try) {
       "  someOne.action(true);"
       "}";
   bool result = parser.parse(code);
-  ASSERT_TRUE(result);
+  ASSERT_FALSE(result);
 }
 
 TEST(Parser, TryCatch) {
