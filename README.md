@@ -1,8 +1,10 @@
 Status
 ======
 
-The parsing rules and grammar are based on the last ECMAScript specification.
-Right now, the compiler is capable to parse a lot of valid JavaScript code. The current focus is on the AST generation.
+Parsing rules and grammar are based on the last ECMAScript specification.
+Right now, this compiler is capable of parsing a lot of valid JavaScript code.
+
+The current focus is on the AST generation.
 
 
 How to compile and test
