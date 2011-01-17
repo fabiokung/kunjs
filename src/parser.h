@@ -1,10 +1,10 @@
-#ifndef KUNGJS_PARSER_H_
-#define KUNGJS_PARSER_H_
+#ifndef KUNJS_PARSER_H_
+#define KUNJS_PARSER_H_
 
 #include "ast.h"
 #include <string>
 
-namespace kungjs {
+namespace kunjs {
 
 class Parser {
  public:
@@ -12,7 +12,7 @@ class Parser {
 };
 
 
-} // namespace kungjs
+} // namespace kunjs
 
-#endif // KUNGJS_PARSER_H_
+#endif // KUNJS_PARSER_H_
 

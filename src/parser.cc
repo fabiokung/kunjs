@@ -5,10 +5,10 @@
 #include <boost/spirit/include/qi.hpp>
 #include <string>
 
-namespace kungjs {
+namespace kunjs {
 
 bool Parser::parse(std::string code) {
-  typedef kungjs::javascript_grammar<std::string::iterator> javascript;
+  typedef kunjs::javascript_grammar<std::string::iterator> javascript;
   javascript grammar;
   std::string::iterator begin = code.begin();
   std::string::iterator end = code.end();
@@ -34,5 +34,5 @@ bool Parser::parse(std::string code) {
 
 }
 
-} // namespace kungjs
+} // namespace kunjs
 

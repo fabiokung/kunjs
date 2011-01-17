@@ -1,5 +1,5 @@
-#ifndef KUNGJS_GRAMMAR_H_
-#define KUNGJS_GRAMMAR_H_
+#ifndef KUNJS_GRAMMAR_H_
+#define KUNJS_GRAMMAR_H_
 
 #define BOOST_SPIRIT_DEBUG
 #include "ast.h"
@@ -9,7 +9,7 @@
 #include <vector>
 #include <string>
 
-namespace kungjs {
+namespace kunjs {
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
@@ -420,7 +420,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, std::string(), ascii::space_type> string_literal;
 };
 
-} // namespace kungjs
+} // namespace kunjs
 
-#endif // KUNGJS_GRAMMAR_H_
+#endif // KUNJS_GRAMMAR_H_
 

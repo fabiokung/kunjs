@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(kungjs)
+project(kunjs)
 
 set(GTEST_DIR utils/tests/gtest-1.5.0)
 set(BOOST_DIR utils/boost_1_45_0)
