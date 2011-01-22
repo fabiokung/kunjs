@@ -16,15 +16,15 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
-struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
+struct javascript_grammar : qi::grammar<Iterator, ast::Program(), ascii::space_type> {
 
   javascript_grammar();
 
-  qi::rule<Iterator, ascii::space_type> program;
-  qi::rule<Iterator, ascii::space_type> source_element;
-  qi::rule<Iterator, ascii::space_type> function_declaration;
+  qi::rule<Iterator, ast::Program(), ascii::space_type> program;
+  qi::rule<Iterator, ast::SourceElement(), ascii::space_type> source_element;
+  qi::rule<Iterator, ast::FunctionDeclaration(), ascii::space_type> function_declaration;
   qi::rule<Iterator, std::vector<std::string>(), ascii::space_type> formal_parameter_list;
-  qi::rule<Iterator, ascii::space_type> function_body;
+  qi::rule<Iterator, ast::FunctionBody(), ascii::space_type> function_body;
 
   qi::rule<Iterator, ast::Statement(), ascii::space_type> statement;
   qi::rule<Iterator, ast::Var(), ascii::space_type> variable_statement;

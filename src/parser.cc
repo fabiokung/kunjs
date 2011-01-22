@@ -1,5 +1,4 @@
 #include "parser.h"
-#include "ast.h"
 #include "grammar.h"
 
 #include <boost/spirit/include/qi.hpp>
@@ -12,7 +11,8 @@ bool Parser::parse(std::string code) {
   javascript grammar;
   std::string::const_iterator begin = code.begin();
   std::string::const_iterator end = code.end();
-  bool result = phrase_parse(begin, end, grammar, boost::spirit::ascii::space);
+  ast::Program ast;
+  bool result = phrase_parse(begin, end, grammar, boost::spirit::ascii::space, ast);
 
   std::cout << "Result: " << std::boolalpha << result << "\n";
   if (result && begin == end)

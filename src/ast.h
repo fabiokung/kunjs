@@ -30,15 +30,15 @@ typedef std::vector<AssignmentExpression> ArrayLiteral;
 
 typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression;
 
-struct FunctionExpression {
-  boost::optional<std::string> name;
-  std::vector<std::string> parameters;
-  // std::vector<SourceElement> body;
-};
-
 typedef std::vector<AssignmentExpression> Arguments;
 
-typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
+struct FunctionExpression;
+
+typedef boost::variant<
+          PrimaryExpression,
+          boost::recursive_wrapper<FunctionExpression>
+        > MemberOptions;
+
 typedef boost::variant<Expression, std::string> MemberModifiers;
 
 struct MemberAccess {
@@ -322,8 +322,28 @@ struct Try {
   boost::optional<Finally> finally_block;
 };
 
-//typedef boost::variant<FunctionDeclaration, Statement> SourceElement;
-//typedef std::vector<SourceElement> Program;
+struct FunctionDeclaration;
+
+typedef boost::variant<
+          boost::recursive_wrapper<FunctionDeclaration>,
+          Statement
+        > SourceElement;
+
+typedef std::vector<SourceElement> FunctionBody;
+
+struct FunctionDeclaration {
+  std::string name;
+  std::vector<std::string> parameters;
+  FunctionBody body;
+};
+
+struct FunctionExpression {
+  boost::optional<std::string> name;
+  std::vector<std::string> parameters;
+  FunctionBody body;
+};
+
+typedef std::vector<SourceElement> Program;
 
 } // namespace ast
 } // namespace kunjs
@@ -334,9 +354,17 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::FunctionDeclaration,
+    (std::string, name)
+    (std::vector<std::string>, parameters)
+    (kunjs::ast::FunctionBody, body)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::FunctionExpression,
     (boost::optional<std::string>, name)
     (std::vector<std::string>, parameters)
+    (kunjs::ast::FunctionBody, body)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
