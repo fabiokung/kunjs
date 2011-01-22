@@ -93,6 +93,36 @@ TEST(Parser, MultipleAssignment) {
   ASSERT_TRUE(result);
 }
 
+TEST(Parser, DoWhile) {
+  kunjs::Parser parser;
+  std::string code =
+      "do {"
+      "  n += 10;"
+      "} while (n <= 100);";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, While) {
+  kunjs::Parser parser;
+  std::string code =
+      "while(n < 10) {"
+      "  doSomething();"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, EmptyForLoop) {
+  kunjs::Parser parser;
+  std::string code =
+      "for(;;) {"
+      "  noop();"
+      "}";
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
 TEST(Parser, SimpleForLoop) {
   kunjs::Parser parser;
   std::string code =

@@ -33,7 +33,7 @@ typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression
 struct FunctionExpression {
   boost::optional<std::string> name;
   std::vector<std::string> parameters;
-  // TODO body
+  // std::vector<SourceElement> body;
 };
 
 typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
@@ -178,7 +178,6 @@ struct For;
 struct ForWithVar;
 struct Foreach;
 struct ForeachWithVar;
-typedef boost::variant<DoWhile, While, For, ForWithVar, Foreach, ForeachWithVar> Iteration;
 
 struct Continue {
   boost::optional<std::string> label;
@@ -195,7 +194,6 @@ struct Return {
 struct With;
 
 struct Case;
-
 struct Switch;
 
 struct LabelledStatement;
@@ -214,7 +212,12 @@ typedef boost::make_recursive_variant<
           Var,
           Noop,
           boost::recursive_wrapper<If>,
-          //Iteration,
+          boost::recursive_wrapper<DoWhile>,
+          boost::recursive_wrapper<While>,
+          boost::recursive_wrapper<For>,
+          boost::recursive_wrapper<ForWithVar>,
+          boost::recursive_wrapper<Foreach>,
+          boost::recursive_wrapper<ForeachWithVar>,
           Continue,
           Break,
           Return,

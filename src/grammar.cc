@@ -55,11 +55,16 @@ javascript_grammar<Iterator>::javascript_grammar()
   function_body %= *source_element;
 
   statement %=
-      ! lit("function") >> expression[_val = _1] >> ";"
+      ! lit("function") >> expression[_val = _1] > ";"
       | variable_statement
       | empty_statement
       | if_statement
-      //| iteration_statement
+      | do_while_statement
+      | while_statement
+      | for_statement
+      | for_with_var_statement
+      | foreach_statement
+      | foreach_with_var_statement
       | continue_statement
       | break_statement
       | return_statement
@@ -69,24 +74,16 @@ javascript_grammar<Iterator>::javascript_grammar()
       | throw_statement
       | try_statement
       | string("debugger") > ";"
-      | "{" >> *statement >> "}";
+      | lit("{") > *statement > lit("}");
 
-  variable_statement %= lit("var") >> (variable_declaration % ",") >> ";";
+  variable_statement %= lit("var") >> (variable_declaration % ",") > ";";
   variable_declaration %= identifier >> -("=" >> assignment_expression);
 
   empty_statement %= lit(';')[_val = construct<ast::Noop>()];
 
   if_statement %= lit("if") >> "(" >> expression >> ")" >> statement >> -(lit("else") >> statement);
 
-  iteration_statement %=
-      do_while_statement
-      | while_statement
-      | for_statement
-      | for_with_var_statement
-      | foreach_statement
-      | foreach_with_var_statement;
-
-  do_while_statement %= lit("do") >> statement >> "while" >> "(" >> expression >> ")" >> ";";
+  do_while_statement %= lit("do") >> statement >> "while" >> "(" >> expression >> ")" > ";";
   while_statement %= lit("while") >> "(" >> expression >> ")" >> statement;
   for_statement %= lit("for") >> "(" >> -expression >> ";" >> -expression >> ";" >> -expression >> ")" >> statement;
   for_with_var_statement %= lit("for") >> "(" >> "var" >> (variable_declaration % ",") >> ";" >> -expression >> ";" >> -expression >> ")" >> statement;
@@ -269,7 +266,12 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(variable_declaration);
   BOOST_SPIRIT_DEBUG_NODE(empty_statement);
   BOOST_SPIRIT_DEBUG_NODE(if_statement);
-  BOOST_SPIRIT_DEBUG_NODE(iteration_statement);
+  BOOST_SPIRIT_DEBUG_NODE(do_while_statement);
+  BOOST_SPIRIT_DEBUG_NODE(while_statement);
+  BOOST_SPIRIT_DEBUG_NODE(for_statement);
+  BOOST_SPIRIT_DEBUG_NODE(for_with_var_statement);
+  BOOST_SPIRIT_DEBUG_NODE(foreach_statement);
+  BOOST_SPIRIT_DEBUG_NODE(foreach_with_var_statement);
   BOOST_SPIRIT_DEBUG_NODE(continue_statement);
   BOOST_SPIRIT_DEBUG_NODE(break_statement);
   BOOST_SPIRIT_DEBUG_NODE(return_statement);

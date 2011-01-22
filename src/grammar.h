@@ -32,7 +32,6 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ast::Noop(), ascii::space_type> empty_statement;
   qi::rule<Iterator, ast::If(), ascii::space_type> if_statement;
 
-  qi::rule<Iterator, ast::Iteration(), ascii::space_type> iteration_statement;
   qi::rule<Iterator, ast::DoWhile(), ascii::space_type> do_while_statement;
   qi::rule<Iterator, ast::While(), ascii::space_type> while_statement;
   qi::rule<Iterator, ast::For(), ascii::space_type> for_statement;
