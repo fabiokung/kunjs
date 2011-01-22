@@ -55,7 +55,7 @@ javascript_grammar<Iterator>::javascript_grammar()
   function_body %= *source_element;
 
   statement %=
-      ! lit("function") >> expression[_val = _1] > ";"
+      !lit("function") >> expression[_val = _1] >> ";"
       | variable_statement
       | empty_statement
       | if_statement
@@ -76,10 +76,10 @@ javascript_grammar<Iterator>::javascript_grammar()
       | string("debugger") > ";"
       | lit("{") > *statement > lit("}");
 
-  variable_statement %= lit("var") >> (variable_declaration % ",") > ";";
+  variable_statement %= lit("var") >> (variable_declaration % ",") >> ";";
   variable_declaration %= identifier >> -("=" >> assignment_expression);
 
-  empty_statement %= lit(';')[_val = construct<ast::Noop>()];
+  empty_statement %= lit(";")[_val = construct<ast::Noop>()];
 
   if_statement %= lit("if") >> "(" >> expression >> ")" >> statement >> -(lit("else") >> statement);
 
@@ -143,25 +143,25 @@ javascript_grammar<Iterator>::javascript_grammar()
 
   equality_expression %= relational_expression >> *(equality_operator > relational_expression);
   equality_operator %= 
-      string("==")
-      | string("!=")
-      | string("===")
-      | string("!==");
+      string("===")
+      | string("!==")
+      | string("==")
+      | string("!=");
 
   relational_expression %= shift_expression >> *(relational_operator > shift_expression);
   relational_operator %= 
-      string("<")
-      | string (">")
-      | string("<=")
+      string("<=")
       | string(">=")
+      | string("<")
+      | string (">")
       | string("instanceof")
       | string("in");
 
   shift_expression %= additive_expression >> *(shift_operator > additive_expression);
   shift_operator %=
-      string("<<")
-      | string(">>")
-      | string(">>>");
+      string(">>>")
+      | string("<<")
+      | string(">>");
 
   additive_expression %= multiplicative_expression >> *(additive_operator > multiplicative_expression);
   additive_operator %= string("+") | string("-");
@@ -195,9 +195,13 @@ javascript_grammar<Iterator>::javascript_grammar()
 
   new_expression %= *string("new") >> member_expression;
 
-  member_expression %= (primary_expression | function_expression)
+  member_access %= (primary_expression | function_expression)
       >> *(('[' >> expression >> ']') | ('.' >> identifier_name));
-  //| "new" >> member_expression >> arguments;
+
+  instantiation %= member_expression >> arguments;
+  member_expression %=
+      member_access
+      | lit("new") > instantiation;
 
   primary_expression %=
       this_reference
@@ -312,6 +316,8 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(call_expression);
   BOOST_SPIRIT_DEBUG_NODE(arguments);
   BOOST_SPIRIT_DEBUG_NODE(new_expression);
+  BOOST_SPIRIT_DEBUG_NODE(member_access);
+  BOOST_SPIRIT_DEBUG_NODE(instantiation);
   BOOST_SPIRIT_DEBUG_NODE(member_expression);
   BOOST_SPIRIT_DEBUG_NODE(primary_expression);
   BOOST_SPIRIT_DEBUG_NODE(array_literal);

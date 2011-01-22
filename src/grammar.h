@@ -97,6 +97,8 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ast::NewExpression(), ascii::space_type> new_expression;
 
   qi::rule<Iterator, ast::FunctionExpression(), ascii::space_type> function_expression;
+  qi::rule<Iterator, ast::MemberAccess(), ascii::space_type> member_access;
+  qi::rule<Iterator, ast::Instantiation(), ascii::space_type> instantiation;
   qi::rule<Iterator, ast::MemberExpression(), ascii::space_type> member_expression;
   qi::rule<Iterator, ast::PrimaryExpression(), ascii::space_type> primary_expression;
   qi::rule<Iterator, ast::ArrayLiteral(), ascii::space_type> array_literal;

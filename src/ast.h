@@ -36,19 +36,31 @@ struct FunctionExpression {
   // std::vector<SourceElement> body;
 };
 
+typedef std::vector<AssignmentExpression> Arguments;
+
 typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
 typedef boost::variant<Expression, std::string> MemberModifiers;
-struct MemberExpression {
+
+struct MemberAccess {
   MemberOptions member;
   std::vector<MemberModifiers> modifiers;
+};
+
+struct Instantiation;
+typedef boost::variant<
+          MemberAccess,
+          boost::recursive_wrapper<Instantiation>
+        > MemberExpression;
+
+struct Instantiation {
+  MemberExpression member;
+  Arguments arguments;
 };
 
 struct NewExpression {
   std::vector<std::string> operators;
   MemberExpression member;
 };
-
-typedef std::vector<AssignmentExpression> Arguments;
 
 typedef boost::variant<Arguments, Expression, std::string> CallModifiers;
 struct CallExpression {
@@ -338,9 +350,15 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kunjs::ast::MemberExpression,
+    kunjs::ast::MemberAccess,
     (kunjs::ast::MemberOptions, member)
     (std::vector<kunjs::ast::MemberModifiers>, modifiers)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::Instantiation,
+    (kunjs::ast::MemberExpression, member)
+    (kunjs::ast::Arguments, arguments)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
