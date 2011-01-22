@@ -1,7 +1,6 @@
 #ifndef KUNJS_PARSER_H_
 #define KUNJS_PARSER_H_
 
-#include "ast.h"
 #include <string>
 
 namespace kunjs {

@@ -11,9 +11,13 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/${GTEST_DIR}/include
     ${PROJECT_SOURCE_DIR}/src)
 
-#add_library(grammar src/grammar.cc)
+link_directories(${PROJECT_BINARY_DIR})
 
-cxx_executable(run-tests test gtest_main test/parser_test.cc src/parser.cc)
+add_library(grammar src/grammar.cc)
+add_library(parser src/parser.cc)
+
+add_executable(run-tests test/parser_test.cc)
+target_link_libraries(run-tests gtest_main grammar parser)
 
 enable_testing()
 add_test(all ${EXECUTABLE_OUTPUT_PATH}/run-tests)

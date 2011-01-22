@@ -182,6 +182,10 @@ struct Return {
 
 struct With;
 
+struct Case;
+
+struct Switch;
+
 struct LabelledStatement;
 
 struct Throw {
@@ -202,6 +206,7 @@ typedef boost::make_recursive_variant<
           Return,
           boost::recursive_wrapper<With>,
           boost::recursive_wrapper<LabelledStatement>,
+          boost::recursive_wrapper<Switch>,
           Throw,
           boost::recursive_wrapper<Try>,
           std::string,
@@ -217,6 +222,20 @@ struct If {
 struct With {
   Expression expression;
   Statement statement;
+};
+
+struct Case {
+  Expression match_clause;
+  std::vector<Statement> statements;
+};
+
+typedef std::vector<Statement> Default;
+
+struct Switch {
+  Expression condition;
+  std::vector<Case> clauses;
+  boost::optional<Default> default_clause;
+  std::vector<Case> other_clauses;
 };
 
 struct LabelledStatement {
@@ -427,6 +446,20 @@ BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::With,
     (kunjs::ast::Expression, expression)
     (kunjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::Case,
+    (kunjs::ast::Expression, match_clause)
+    (std::vector<kunjs::ast::Statement>, statements)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::Switch,
+    (kunjs::ast::Expression, condition)
+    (std::vector<kunjs::ast::Case>, clauses)
+    (boost::optional<kunjs::ast::Default>, default_clause)
+    (std::vector<kunjs::ast::Case>, other_clauses)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
