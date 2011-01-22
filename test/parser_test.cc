@@ -237,3 +237,79 @@ TEST(Parser, TryCatchFinally) {
   ASSERT_TRUE(result);
 }
 
+TEST(Parser, SwitchCaseDefault) {
+  kunjs::Parser parser;
+  // from http://www.w3schools.com/js/js_switch.asp
+  std::string code =
+      "var d = new Date();"
+      "var theDay = d.getDay();"
+      "switch (theDay) {"
+      "case 5:"
+      "  document.write('Finally Friday');"
+      "  break;"
+      "case 6:"
+      "  document.write('Super Saturday');"
+      "  break;"
+      "case 0:"
+      "  document.write('Sleepy Sunday');"
+      "  break;"
+      "default:"
+      "  document.write('I am looking forward to this weekend!');"
+      "}";
+
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, SwitchDefaultCase) {
+  kunjs::Parser parser;
+  std::string code =
+      "switch (theDay) {"
+      "case 5:"
+      "  document.write('Finally Friday');"
+      "  break;"
+      "default:"
+      "  document.write('I am looking forward to this weekend!');"
+      "case 6:"
+      "  document.write('Super Saturday');"
+      "  break;"
+      "case 0:"
+      "  document.write('Sleepy Sunday');"
+      "  break;"
+      "}";
+
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, SwitchCase) {
+  kunjs::Parser parser;
+  std::string code =
+      "switch (theDay) {"
+      "case 5:"
+      "  document.write('Finally Friday');"
+      "  break;"
+      "case 6:"
+      "  document.write('Super Saturday');"
+      "  break;"
+      "case 0:"
+      "  document.write('Sleepy Sunday');"
+      "  break;"
+      "}";
+
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, SwitchDefault) {
+  kunjs::Parser parser;
+  std::string code =
+      "switch (theDay) {"
+      "default:"
+      "  document.write('I am looking forward to this weekend!');"
+      "}";
+
+  bool result = parser.parse(code);
+  ASSERT_TRUE(result);
+}
+
