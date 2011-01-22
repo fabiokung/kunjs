@@ -47,7 +47,7 @@ javascript_grammar<Iterator>::javascript_grammar()
 
   // Top level
   program %= *source_element;
-  source_element %= statement | function_declaration;
+  source_element %= function_declaration | statement;
 
   function_declaration %= lit("function") > identifier > '(' > -formal_parameter_list > ')' > '{' > function_body > '}';
   function_expression %= lit("function") > -identifier > '(' > -formal_parameter_list > ')' > '{' > function_body > '}';
@@ -57,7 +57,7 @@ javascript_grammar<Iterator>::javascript_grammar()
   statement %=
       ! lit("function") >> expression[_val = _1] >> ";"
       | variable_statement
-      //| empty_statement
+      | empty_statement
       | if_statement
       //| iteration_statement
       | continue_statement
@@ -74,17 +74,24 @@ javascript_grammar<Iterator>::javascript_grammar()
   variable_statement %= lit("var") >> (variable_declaration % ",") >> ";";
   variable_declaration %= identifier >> -("=" >> assignment_expression);
 
-  empty_statement %= lit(';');
+  empty_statement %= lit(';')[_val = construct<ast::Noop>()];
 
   if_statement %= lit("if") >> "(" >> expression >> ")" >> statement >> -(lit("else") >> statement);
 
   iteration_statement %=
-      lit("do") >> statement >> "while" >> "(" >> expression >> ")" >> ";"
-      | lit("while") >> "(" >> expression >> ")" >> statement
-      | lit("for") >> "(" >> -expression >> ";" >> -expression >> ";" >> -expression >> ")" >> statement
-      | lit("for") >> "(" >> "var" >> (variable_declaration % ",") >> ";" >> -expression >> ";" >> -expression >> ")" >> statement
-      | lit("for") >> "(" >> lhs_expression >> "in" >> expression >> ")" >> statement
-      | lit("for") >> "(" >> "var" >> variable_declaration >> "in" >> expression >> ")" >> statement;
+      do_while_statement
+      | while_statement
+      | for_statement
+      | for_with_var_statement
+      | foreach_statement
+      | foreach_with_var_statement;
+
+  do_while_statement %= lit("do") >> statement >> "while" >> "(" >> expression >> ")" >> ";";
+  while_statement %= lit("while") >> "(" >> expression >> ")" >> statement;
+  for_statement %= lit("for") >> "(" >> -expression >> ";" >> -expression >> ";" >> -expression >> ")" >> statement;
+  for_with_var_statement %= lit("for") >> "(" >> "var" >> (variable_declaration % ",") >> ";" >> -expression >> ";" >> -expression >> ")" >> statement;
+  foreach_statement %= lit("for") >> "(" >> lhs_expression >> "in" >> expression >> ")" >> statement;
+  foreach_with_var_statement %= lit("for") >> "(" >> "var" >> variable_declaration >> "in" >> expression >> ")" >> statement;
 
   continue_statement %= lit("continue") > !eol > -identifier > ";";
   break_statement %= lit("break") > !eol > -identifier > ";";
@@ -319,7 +326,7 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(string_literal);
 }
 
-template struct javascript_grammar<std::string::iterator>;
+template struct javascript_grammar<std::string::const_iterator>;
 
 } // namespace kunjs
 

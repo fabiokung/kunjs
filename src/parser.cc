@@ -8,10 +8,10 @@
 namespace kunjs {
 
 bool Parser::parse(std::string code) {
-  typedef kunjs::javascript_grammar<std::string::iterator> javascript;
+  typedef kunjs::javascript_grammar<std::string::const_iterator> javascript;
   javascript grammar;
-  std::string::iterator begin = code.begin();
-  std::string::iterator end = code.end();
+  std::string::const_iterator begin = code.begin();
+  std::string::const_iterator end = code.end();
   bool result = phrase_parse(begin, end, grammar, boost::spirit::ascii::space);
 
   std::cout << "Result: " << std::boolalpha << result << "\n";

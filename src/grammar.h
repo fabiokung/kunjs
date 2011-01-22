@@ -23,24 +23,33 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
   qi::rule<Iterator, ascii::space_type> program;
   qi::rule<Iterator, ascii::space_type> source_element;
   qi::rule<Iterator, ascii::space_type> function_declaration;
-  qi::rule<Iterator, ast::FunctionExpression(), ascii::space_type> function_expression;
   qi::rule<Iterator, std::vector<std::string>(), ascii::space_type> formal_parameter_list;
   qi::rule<Iterator, ascii::space_type> function_body;
 
   qi::rule<Iterator, ast::Statement(), ascii::space_type> statement;
   qi::rule<Iterator, ast::Var(), ascii::space_type> variable_statement;
   qi::rule<Iterator, ast::VarDeclaration(), ascii::space_type> variable_declaration;
-  qi::rule<Iterator, ascii::space_type> empty_statement;
+  qi::rule<Iterator, ast::Noop(), ascii::space_type> empty_statement;
   qi::rule<Iterator, ast::If(), ascii::space_type> if_statement;
-  qi::rule<Iterator, ascii::space_type> iteration_statement;
+
+  qi::rule<Iterator, ast::Iteration(), ascii::space_type> iteration_statement;
+  qi::rule<Iterator, ast::DoWhile(), ascii::space_type> do_while_statement;
+  qi::rule<Iterator, ast::While(), ascii::space_type> while_statement;
+  qi::rule<Iterator, ast::For(), ascii::space_type> for_statement;
+  qi::rule<Iterator, ast::ForWithVar(), ascii::space_type> for_with_var_statement;
+  qi::rule<Iterator, ast::Foreach(), ascii::space_type> foreach_statement;
+  qi::rule<Iterator, ast::ForeachWithVar(), ascii::space_type> foreach_with_var_statement;
+
   qi::rule<Iterator, ast::Continue(), ascii::space_type> continue_statement;
   qi::rule<Iterator, ast::Break(), ascii::space_type> break_statement;
   qi::rule<Iterator, ast::Return(), ascii::space_type> return_statement;
   qi::rule<Iterator, ast::With(), ascii::space_type> with_statement;
   qi::rule<Iterator, ast::LabelledStatement(), ascii::space_type> labelled_statement;
+
   qi::rule<Iterator, ast::Switch(), ascii::space_type> switch_statement;
   qi::rule<Iterator, ast::Case(), ascii::space_type> case_clause;
   qi::rule<Iterator, ast::Default(), ascii::space_type> default_clause;
+
   qi::rule<Iterator, ast::Throw(), ascii::space_type> throw_statement;
   qi::rule<Iterator, ast::Try(), ascii::space_type> try_statement;
   qi::rule<Iterator, ast::Catch(), ascii::space_type> catch_block;
@@ -88,6 +97,7 @@ struct javascript_grammar : qi::grammar<Iterator, ascii::space_type> {
 
   qi::rule<Iterator, ast::NewExpression(), ascii::space_type> new_expression;
 
+  qi::rule<Iterator, ast::FunctionExpression(), ascii::space_type> function_expression;
   qi::rule<Iterator, ast::MemberExpression(), ascii::space_type> member_expression;
   qi::rule<Iterator, ast::PrimaryExpression(), ascii::space_type> primary_expression;
   qi::rule<Iterator, ast::ArrayLiteral(), ascii::space_type> array_literal;

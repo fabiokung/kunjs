@@ -9,12 +9,6 @@
 
 namespace kunjs { namespace ast {
 
-struct FunctionExpression {
-  boost::optional<std::string> name;
-  std::vector<std::string> parameters;
-  // TODO body
-};
-
 struct Null {
   Null() {}
   explicit Null(std::string value) : value(value) {}
@@ -35,6 +29,12 @@ typedef std::vector<AssignmentExpression> Expression;
 typedef std::vector<AssignmentExpression> ArrayLiteral;
 
 typedef boost::variant<This, std::string, Literal, Expression> PrimaryExpression;
+
+struct FunctionExpression {
+  boost::optional<std::string> name;
+  std::vector<std::string> parameters;
+  // TODO body
+};
 
 typedef boost::variant<PrimaryExpression, FunctionExpression> MemberOptions;
 typedef boost::variant<Expression, std::string> MemberModifiers;
@@ -166,7 +166,19 @@ struct VarDeclaration {
 
 typedef std::vector<VarDeclaration> Var;
 
+struct Noop {
+  int n;
+};
+
 struct If;
+
+struct DoWhile;
+struct While;
+struct For;
+struct ForWithVar;
+struct Foreach;
+struct ForeachWithVar;
+typedef boost::variant<DoWhile, While, For, ForWithVar, Foreach, ForeachWithVar> Iteration;
 
 struct Continue {
   boost::optional<std::string> label;
@@ -200,7 +212,9 @@ struct Try;
 typedef boost::make_recursive_variant<
           Expression,
           Var,
+          Noop,
           boost::recursive_wrapper<If>,
+          //Iteration,
           Continue,
           Break,
           Return,
@@ -217,6 +231,43 @@ struct If {
   Expression condition;
   Statement true_clause;
   boost::optional<Statement> false_clause;
+};
+
+struct DoWhile {
+  Statement statement;
+  Expression condition;
+};
+
+struct While {
+  Expression condition;
+  Statement statement;
+};
+
+struct For {
+  boost::optional<Expression> initialization;
+  boost::optional<Expression> condition;
+  boost::optional<Expression> action;
+  Statement statement;
+};
+
+struct ForWithVar {
+  std::vector<VarDeclaration> initialization;
+  boost::optional<Expression> condition;
+  boost::optional<Expression> action;
+  Statement statement;
+};
+
+
+struct Foreach {
+  LhsExpression item;
+  Expression list;
+  Statement statement;
+};
+
+struct ForeachWithVar {
+  VarDeclaration item;
+  Expression list;
+  Statement statement;
 };
 
 struct With {
@@ -257,11 +308,15 @@ struct Try {
 };
 
 //typedef boost::variant<FunctionDeclaration, Statement> SourceElement;
-typedef Statement SourceElement;
-typedef std::vector<SourceElement> Program;
+//typedef std::vector<SourceElement> Program;
 
 } // namespace ast
 } // namespace kunjs
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::Noop,
+    (int, n)
+)
 
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::FunctionExpression,
@@ -481,6 +536,48 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::Continue,
     (boost::optional<std::string>, label)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::DoWhile,
+    (kunjs::ast::Statement, statement)
+    (kunjs::ast::Expression, condition)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::While,
+    (kunjs::ast::Expression, condition)
+    (kunjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::For,
+    (boost::optional<kunjs::ast::Expression>, initialization)
+    (boost::optional<kunjs::ast::Expression>, condition)
+    (boost::optional<kunjs::ast::Expression>, action)
+    (kunjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::ForWithVar,
+    (std::vector<kunjs::ast::VarDeclaration>, initialization)
+    (boost::optional<kunjs::ast::Expression>, condition)
+    (boost::optional<kunjs::ast::Expression>, action)
+    (kunjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::Foreach,
+    (kunjs::ast::LhsExpression, item)
+    (kunjs::ast::Expression, list)
+    (kunjs::ast::Statement, statement)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    kunjs::ast::ForeachWithVar,
+    (kunjs::ast::VarDeclaration, item)
+    (kunjs::ast::Expression, list)
+    (kunjs::ast::Statement, statement)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
