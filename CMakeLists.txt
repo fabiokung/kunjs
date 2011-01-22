@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 project(kunjs)
 
 find_package(GTest REQUIRED)
-find_package(Boost REQUIRED)
+find_package(Boost 1.45.0 REQUIRED)
 
 include_directories(
     ${Boost_INCLUDES}
