@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 2.8)
 project(kunjs)
 
-set(GTEST_DIR utils/tests/gtest-1.5.0)
-set(BOOST_DIR utils/boost_1_45_0)
-
-add_subdirectory(${GTEST_DIR})
+find_package(GTest REQUIRED)
+find_package(Boost REQUIRED)
 
 include_directories(
-    ${PROJECT_SOURCE_DIR}/${BOOST_DIR}
-    ${PROJECT_SOURCE_DIR}/${GTEST_DIR}/include
+    ${Boost_INCLUDES}
+    ${GTest_INCLUDES}
     ${PROJECT_SOURCE_DIR}/src)
 
-link_directories(${PROJECT_BINARY_DIR})
+link_directories(
+    ${PROJECT_BINARY_DIR}
+    ${GTest_LIBRARIES}
+    ${Boost_LIBRARIES})
 
 add_library(grammar src/grammar.cc)
 add_library(parser src/parser.cc)
