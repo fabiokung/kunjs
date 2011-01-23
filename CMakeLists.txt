@@ -14,8 +14,8 @@ link_directories(
     ${GTest_LIBRARIES}
     ${Boost_LIBRARIES})
 
-add_library(grammar src/grammar.cc)
-add_library(parser src/parser.cc)
+add_library(grammar src/kunjs/grammar.cc)
+add_library(parser src/kunjs/parser.cc)
 
 add_executable(run-tests test/parser_test.cc)
 target_link_libraries(run-tests gtest_main grammar parser)

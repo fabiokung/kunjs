@@ -1,5 +1,4 @@
-#include "kunjs.h"
-#include "grammar.h"
+#include "kunjs/kunjs.h"
 
 #include <iostream>
 

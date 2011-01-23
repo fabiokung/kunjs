@@ -7,7 +7,7 @@
 
 #define BOOST_SPIRIT_DEBUG
 
-#include "ast.h"
+#include "kunjs/ast.h"
 #include <boost/spirit/home/phoenix/object/construct.hpp>
 #include <boost/spirit/home/phoenix/operator/self.hpp>
 #include <boost/spirit/include/qi.hpp>
