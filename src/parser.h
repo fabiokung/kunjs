@@ -1,6 +1,10 @@
 #ifndef KUNJS_PARSER_H_
 #define KUNJS_PARSER_H_
 
+#if defined(_MSC_VER)
+#pragma once
+#endif
+
 #include <string>
 
 namespace kunjs {

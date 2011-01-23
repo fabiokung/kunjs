@@ -1,6 +1,5 @@
 #include "parser.h"
 #include "grammar.h"
-
 #include <boost/spirit/include/qi.hpp>
 #include <string>
 

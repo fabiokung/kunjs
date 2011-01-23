@@ -1,6 +1,10 @@
 #ifndef KUNJS_GRAMMAR_H_
 #define KUNJS_GRAMMAR_H_
 
+#if defined(_MSC_VER)
+#pragma once
+#endif
+
 #define BOOST_SPIRIT_DEBUG
 
 #include "ast.h"

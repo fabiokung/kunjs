@@ -1,7 +1,12 @@
 #ifndef KUNJS_AST_H_
 #define KUNJS_AST_H_
 
+#if defined(_MSC_VER)
+#pragma once
+#endif
+
 #include <boost/optional.hpp>
+#include <boost/spirit/home/support/attributes.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <vector>
@@ -9,20 +14,12 @@
 
 namespace kunjs { namespace ast {
 
-struct Null {
-  Null() {}
-  explicit Null(std::string value) : value(value) {}
-  std::string value;
-};
+struct Null {};
 
 typedef boost::variant<int, double> Numeric;
 typedef boost::variant<ast::Null, bool, Numeric, std::string> Literal;
 
-struct This {
-  This() {}
-  explicit This(std::string value) : value(value) {}
-  std::string value;
-};
+struct This {};
 
 struct AssignmentExpression;
 typedef std::vector<AssignmentExpression> Expression;
@@ -178,9 +175,7 @@ struct VarDeclaration {
 
 typedef std::vector<VarDeclaration> Var;
 
-struct Noop {
-  int n;
-};
+struct Noop {};
 
 struct If;
 
@@ -349,11 +344,6 @@ typedef std::vector<SourceElement> Program;
 } // namespace kunjs
 
 BOOST_FUSION_ADAPT_STRUCT(
-    kunjs::ast::Noop,
-    (int, n)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::FunctionDeclaration,
     (std::string, name)
     (std::vector<std::string>, parameters)
@@ -365,16 +355,6 @@ BOOST_FUSION_ADAPT_STRUCT(
     (boost::optional<std::string>, name)
     (std::vector<std::string>, parameters)
     (kunjs::ast::FunctionBody, body)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    kunjs::ast::This,
-    (std::string, value)
-)
-
-BOOST_FUSION_ADAPT_STRUCT(
-    kunjs::ast::Null,
-    (std::string, value)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -642,15 +622,37 @@ BOOST_FUSION_ADAPT_STRUCT(
     (boost::optional<kunjs::ast::AssignmentExpression>, assignment)
 )
 
+namespace boost { namespace spirit { namespace traits {
 
-namespace std {
+template <typename Out>
+struct print_attribute_debug<Out, kunjs::ast::Null> {
+  static void call(Out& out, kunjs::ast::Null const& val) {
+      spirit::traits::print_attribute(out, "(Null)");
+  }
+};
 
-template <typename T>
-std::ostream& operator<<(std::ostream& stream, const boost::recursive_wrapper<T>& wrapper) {
-  stream << "recursive wrapper" << "\n";
-  return stream;
-}
+template <typename Out>
+struct print_attribute_debug<Out, kunjs::ast::This> {
+  static void call(Out& out, kunjs::ast::This const& val) {
+      spirit::traits::print_attribute(out, "(This)");
+  }
+};
 
-}
+template <typename Out>
+struct print_attribute_debug<Out, kunjs::ast::Noop> {
+  static void call(Out& out, kunjs::ast::Noop const& val) {
+      spirit::traits::print_attribute(out, "(Noop)");
+  }
+};
+
+template <typename Out, typename T>
+struct print_attribute_debug<Out, boost::recursive_wrapper<T> > {
+  static void call(Out& out, boost::recursive_wrapper<T> const& val) {
+      spirit::traits::print_attribute(out, val.get());
+  }
+};
+
+} } }
+
 #endif // KUNJS_AST_H_
 
