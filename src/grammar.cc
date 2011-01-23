@@ -214,7 +214,7 @@ javascript_grammar<Iterator>::javascript_grammar()
   array_literal = '[' >> *lit(',') >> assignment_expression
       >> *(+lit(',') >> assignment_expression) >> *lit(',') >> ']';
 
-  this_reference %= string("this")[_val = construct<ast::This>(_1)];
+  this_reference %= string("this")[_val = construct<ast::This>()];
 
   // Lexical Grammar
   identifier %= !reserved_word >> identifier_name;
@@ -248,7 +248,7 @@ javascript_grammar<Iterator>::javascript_grammar()
       | numeric_literal
       | string_literal;
 
-  null_literal %= string("null")[_val = construct<ast::Null>(_1)];
+  null_literal %= string("null")[_val = construct<ast::Null>()];
 
   numeric_literal %= double_ | int_;
 
@@ -264,7 +264,6 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(function_expression);
   BOOST_SPIRIT_DEBUG_NODE(formal_parameter_list);
   BOOST_SPIRIT_DEBUG_NODE(function_body);
-  BOOST_SPIRIT_DEBUG_NODE(source_element);
   BOOST_SPIRIT_DEBUG_NODE(statement);
   BOOST_SPIRIT_DEBUG_NODE(variable_statement);
   BOOST_SPIRIT_DEBUG_NODE(variable_declaration);
@@ -284,10 +283,10 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(switch_statement);
   BOOST_SPIRIT_DEBUG_NODE(case_clause);
   BOOST_SPIRIT_DEBUG_NODE(default_clause);
-  BOOST_SPIRIT_DEBUG_NODE(catch_block);
-  BOOST_SPIRIT_DEBUG_NODE(finally_block);
   BOOST_SPIRIT_DEBUG_NODE(throw_statement);
   BOOST_SPIRIT_DEBUG_NODE(try_statement);
+  BOOST_SPIRIT_DEBUG_NODE(catch_block);
+  BOOST_SPIRIT_DEBUG_NODE(finally_block);
   BOOST_SPIRIT_DEBUG_NODE(expression);
   BOOST_SPIRIT_DEBUG_NODE(assignment_expression);
   BOOST_SPIRIT_DEBUG_NODE(assignment_operator);
@@ -327,7 +326,6 @@ javascript_grammar<Iterator>::javascript_grammar()
   BOOST_SPIRIT_DEBUG_NODE(identifier_start);
   BOOST_SPIRIT_DEBUG_NODE(reserved_word);
   BOOST_SPIRIT_DEBUG_NODE(keyword);
-  BOOST_SPIRIT_DEBUG_NODE(future_reserved_word);
   BOOST_SPIRIT_DEBUG_NODE(literal);
   BOOST_SPIRIT_DEBUG_NODE(null_literal);
   BOOST_SPIRIT_DEBUG_NODE(numeric_literal);
