@@ -14,15 +14,13 @@ bool Parser::parse(std::string code) {
   bool result = phrase_parse(begin, end, grammar, boost::spirit::ascii::space, ast);
 
   std::cout << "Result: " << std::boolalpha << result << "\n";
-  if (result && begin == end)
-  {
+  if (result && begin == end) {
     std::cout << "-------------------------\n";
     std::cout << "Parsing succeeded\n";
     std::cout << "\n-------------------------\n";
     return true;
   }
-  else
-  {
+  else {
     std::string rest(begin, end);
     std::cout << "-------------------------\n";
     std::cout << "Parsing failed\n";
