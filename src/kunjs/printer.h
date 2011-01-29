@@ -31,6 +31,7 @@ class StatementPrinter : public boost::static_visitor<> {
   StatementPrinter(int indent);
   void operator()(ast::Expression const& expression);
   void operator()(ast::Var const& var);
+  void operator()(ast::VarDeclaration const& var);
   void operator()(ast::Noop const& noop);
   void operator()(ast::If const& conditional);
   void operator()(ast::DoWhile const& loop);
@@ -43,8 +44,9 @@ class StatementPrinter : public boost::static_visitor<> {
   void operator()(ast::Break const& node);
   void operator()(ast::Return const& node);
   void operator()(ast::With const& with);
-  void operator()(ast::LabelledStatement const& labeled);
+  void operator()(ast::LabelledStatement const& labelled);
   void operator()(ast::Switch const& conditional);
+  void operator()(ast::Case const& clause);
   void operator()(ast::Throw const& node);
   void operator()(ast::Try const& node);
   void operator()(std::string const& debugger);
@@ -59,6 +61,7 @@ class ExpressionPrinter : public boost::static_visitor<> {
  public:
   ExpressionPrinter(int indent);
   void operator()(ast::AssignmentExpression const& expression);
+  void operator()(ast::LhsExpression const& expression);
 
 
  private:
