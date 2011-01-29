@@ -6,9 +6,13 @@
 #endif
 
 #include "kunjs/ast.h"
+
 #include <boost/spirit/home/phoenix/object/construct.hpp>
 #include <boost/spirit/home/phoenix/operator/self.hpp>
-#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/qi_nonterminal.hpp>
+#include <boost/spirit/include/qi_char.hpp>
+#include <boost/spirit/include/qi_symbols.hpp>
+
 #include <vector>
 #include <string>
 

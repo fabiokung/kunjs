@@ -261,7 +261,7 @@ struct For {
 };
 
 struct ForWithVar {
-  std::vector<VarDeclaration> initialization;
+  Var initialization;
   boost::optional<Expression> condition;
   boost::optional<Expression> action;
   Statement statement;
@@ -281,7 +281,12 @@ struct ForeachWithVar {
 };
 
 struct With {
-  Expression expression;
+  Expression context;
+  Statement statement;
+};
+
+struct LabelledStatement {
+  std::string label;
   Statement statement;
 };
 
@@ -297,11 +302,6 @@ struct Switch {
   std::vector<Case> clauses;
   boost::optional<Default> default_clause;
   std::vector<Case> other_clauses;
-};
-
-struct LabelledStatement {
-  std::string label;
-  Statement statement;
 };
 
 typedef std::vector<Statement> Finally;
@@ -528,7 +528,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::With,
-    (kunjs::ast::Expression, expression)
+    (kunjs::ast::Expression, context)
     (kunjs::ast::Statement, statement)
 )
 
@@ -589,7 +589,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::ForWithVar,
-    (std::vector<kunjs::ast::VarDeclaration>, initialization)
+    (kunjs::ast::Var, initialization)
     (boost::optional<kunjs::ast::Expression>, condition)
     (boost::optional<kunjs::ast::Expression>, action)
     (kunjs::ast::Statement, statement)

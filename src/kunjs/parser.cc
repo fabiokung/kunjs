@@ -2,7 +2,7 @@
 #include "kunjs/grammar.h"
 #include "kunjs/printer.h"
 
-#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/qi_parse.hpp>
 #include <string>
 
 namespace kunjs {

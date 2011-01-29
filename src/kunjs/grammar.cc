@@ -1,5 +1,17 @@
 #include "kunjs/grammar.h"
 
+#include <boost/spirit/include/qi_operator.hpp>
+#include <boost/spirit/include/qi_lit.hpp>
+#include <boost/spirit/include/qi_lexeme.hpp>
+#include <boost/spirit/include/qi_raw.hpp>
+#include <boost/spirit/include/qi_eol.hpp>
+#include <boost/spirit/include/qi_eps.hpp>
+#include <boost/spirit/include/qi_int.hpp>
+#include <boost/spirit/include/qi_real.hpp>
+#include <boost/spirit/include/qi_bool.hpp>
+#include <boost/spirit/include/qi_lazy.hpp>
+#include <boost/spirit/include/qi_action.hpp>
+
 namespace kunjs {
 
 using qi::lit;
@@ -107,8 +119,8 @@ javascript_grammar<Iterator>::javascript_grammar()
   throw_statement %= lit("throw") > !eol > expression[_val = construct<ast::Throw>(_1)] > ";";
 
   try_statement %= lit("try") >> "{" >> *statement >> "}" >> (catch_block || finally_block);
-  catch_block %= lit("catch") >> "(" >> identifier >> ")" >> "{" >> *statement >> "}";
-  finally_block %= lit("finally") >> "{" >> *statement >> "}";
+  catch_block %= lit("catch") > "(" > identifier > ")" > "{" >> *statement > "}";
+  finally_block %= lit("finally") > "{" >> *statement > "}";
 
   expression %= assignment_expression % lit(',');
 
