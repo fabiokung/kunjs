@@ -1,5 +1,7 @@
 #include "kunjs/parser.h"
 #include "kunjs/grammar.h"
+#include "kunjs/printer.h"
+
 #include <boost/spirit/include/qi.hpp>
 #include <string>
 
@@ -11,7 +13,11 @@ bool Parser::parse(std::string code) {
   std::string::const_iterator begin = code.begin();
   std::string::const_iterator end = code.end();
   ast::Program ast;
+
   bool result = phrase_parse(begin, end, grammar, boost::spirit::ascii::space, ast);
+
+  ASTPrinter print_ast(0);
+  print_ast(ast);
 
   std::cout << "Result: " << std::boolalpha << result << "\n";
   if (result && begin == end) {

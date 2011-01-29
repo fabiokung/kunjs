@@ -5,8 +5,6 @@
 #pragma once
 #endif
 
-#define BOOST_SPIRIT_DEBUG
-
 #include "kunjs/ast.h"
 #include <boost/spirit/home/phoenix/object/construct.hpp>
 #include <boost/spirit/home/phoenix/operator/self.hpp>

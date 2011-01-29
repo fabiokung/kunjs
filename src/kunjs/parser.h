@@ -7,6 +7,8 @@
 
 #include <string>
 
+//#define BOOST_SPIRIT_DEBUG
+
 namespace kunjs {
 
 class Parser {

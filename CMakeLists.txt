@@ -15,10 +15,12 @@ link_directories(
     ${Boost_LIBRARIES})
 
 add_library(grammar src/kunjs/grammar.cc)
+add_library(printer src/kunjs/printer.cc)
 add_library(parser src/kunjs/parser.cc)
+target_link_libraries(parser printer grammar)
 
 add_executable(run-tests test/parser_test.cc)
-target_link_libraries(run-tests gtest_main grammar parser)
+target_link_libraries(run-tests gtest_main parser)
 
 enable_testing()
 add_test(all ${EXECUTABLE_OUTPUT_PATH}/run-tests)
