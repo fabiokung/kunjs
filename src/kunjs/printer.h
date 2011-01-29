@@ -11,10 +11,6 @@
 
 namespace kunjs {
 
-//namespace {
-  //std::string indent(int level) const;
-//};
-
 class ASTPrinter : public boost::static_visitor<> {
 
  public:
@@ -53,6 +49,17 @@ class StatementPrinter : public boost::static_visitor<> {
   void operator()(ast::Try const& node);
   void operator()(std::string const& debugger);
   void operator()(std::vector<ast::Statement> const& list);
+
+ private:
+  mutable int indentation;
+};
+
+
+class ExpressionPrinter : public boost::static_visitor<> {
+ public:
+  ExpressionPrinter(int indent);
+  void operator()(ast::AssignmentExpression const& expression);
+
 
  private:
   mutable int indentation;

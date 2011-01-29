@@ -58,19 +58,49 @@ void ASTPrinter::operator()(ast::Statement const& statement) const {
 StatementPrinter::StatementPrinter(int indent) : indentation(indent) {}
 
 void StatementPrinter::operator()(ast::Expression const& expression) {
-  std::cout << indent(indentation) << "(Expression)" << std::endl;
+  std::cout << indent(indentation) << "(Expression " << std::endl;
+  ExpressionPrinter printer(indentation + 2);
+  std::for_each(expression.begin(), expression.end(), printer);
+  std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void StatementPrinter::operator()(ast::Var const& var) {
-  std::cout << indent(indentation) << "(Var)" << std::endl;
+  int next_level = indentation + 2;
+  ExpressionPrinter print_expression(next_level);
+  for (ast::Var::const_iterator it = var.begin(); it != var.end(); ++it) {
+    std::cout << indent(indentation) << "(Var" << std::endl;
+    std::cout << indent(next_level) << "(name " << it->name << ")" << std::endl;
+    if (it->assignment) print_expression(it->assignment.get());
+    std::cout << indent(indentation) << ")" << std::endl;
+  }
 }
 
 void StatementPrinter::operator()(ast::Noop const& noop) {
-  std::cout << indent(indentation) << "(Noop)" << std::endl;
+  std::cout << indent(indentation) << "(Empty)" << std::endl;
 }
 
 void StatementPrinter::operator()(ast::If const& conditional) {
-  std::cout << indent(indentation) << "(If)" << std::endl;
+  int next = indentation + 2;
+  StatementPrinter print_expression(next + 2);
+  ASTPrinter print_statement(next + 2);
+
+  std::cout << indent(indentation) << "(If " << std::endl;
+
+  std::cout << indent(next) << "(condition " << std::endl;
+  print_expression(conditional.condition);
+  std::cout << indent(next) << ")" << std::endl;
+
+  std::cout << indent(next) << "(true_clause " << std::endl;
+  print_statement(conditional.true_clause);
+  std::cout << indent(next) << ")" << std::endl;
+
+  if (conditional.false_clause) {
+    std::cout << indent(next) << "(false_clause " << std::endl;
+    print_statement(conditional.false_clause.get());
+    std::cout << indent(next) << ")" << std::endl;
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void StatementPrinter::operator()(ast::DoWhile const& loop) {
@@ -137,6 +167,14 @@ void StatementPrinter::operator()(std::vector<ast::Statement> const& list) {
   ASTPrinter printer(indentation);
   printer(list);
 }
+
+
+ExpressionPrinter::ExpressionPrinter(int indent) : indentation(indent) {}
+
+void ExpressionPrinter::operator()(ast::AssignmentExpression const& expression) {
+  std::cout << indent(indentation) << "(AssignmentExpression)" << std::endl;
+}
+
 
 } // namespace kunjs
 
