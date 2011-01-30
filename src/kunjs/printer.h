@@ -5,7 +5,7 @@
 #pragma once
 #endif
 
-#include "ast.h"
+#include "kunjs/ast.h"
 #include <boost/variant/static_visitor.hpp>
 #include <string>
 
