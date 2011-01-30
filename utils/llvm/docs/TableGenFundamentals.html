@@ -405,6 +405,8 @@ which case the user must specify it explicitly.</dd>
 the symbol table.  If the type of 'a' does not match <em>type</em>, TableGen
 aborts with an error. !cast&lt;string&gt; is a special case in that the argument must
 be an object defined by a 'def' construct.</dd>
+<dt><tt>!nameconcat&lt;type&gt;(a, b)</tt></dt>
+  <dd>Shorthand for !cast&lt;type&gt;(!strconcat(a, b))</dd>
 <dt><tt>!subst(a, b, c)</tt></dt>
   <dd>If 'a' and 'b' are of string type or are symbol references, substitute 
 'b' for 'a' in 'c.'  This operation is analogous to $(subst) in GNU make.</dd>
@@ -422,8 +424,8 @@ class.  This operation is analogous to $(foreach) in GNU make.</dd>
   <dd>'b' if the result of 'int' or 'bit' operator 'a' is nonzero,
       'c' otherwise.</dd>
 <dt><tt>!eq(a,b)</tt></dt>
-  <dd>'bit 1' if string a is equal to string b, 0 otherwise.  This
-      only operates on string, int and bit objects.  Use !cast&lt;string&gt; to
+  <dd>Integer one if string a is equal to string b, zero otherwise.  This
+      only operates on string, int and bit objects.  Use !cast<string> to
       compare other types of objects.</dd>
 </dl>
 
@@ -813,7 +815,8 @@ end-user to factor out commonality from the records.</p>
 apply, and one or more records to bind the values in.  Here are some
 examples:</p>
 
-<pre class="doc_code">
+<div class="doc_code">
+<pre>
 <b>let</b> isTerminator = 1, isReturn = 1, isBarrier = 1, hasCtrlDep = 1 <b>in</b>
   <b>def</b> RET : I&lt;0xC3, RawFrm, (outs), (ins), "ret", [(X86retflag 0)]&gt;;
 
@@ -830,6 +833,7 @@ examples:</p>
                         "call\t{*}$dst", []&gt;;
   }
 </pre>
+</div>
 
 <p>File-scope "let" expressions are often useful when a couple of definitions
 need to be added to several records, and the records do not otherwise need to be
@@ -840,7 +844,8 @@ more ways to factor out commonality from the records, specially if using
 several levels of multiclass instanciations. This also avoids the need of using
 "let" expressions within subsequent records inside a multiclass.</p> 
 
-<pre class="doc_code">
+<div class="doc_code">
+<pre>
 <b>multiclass </b>basic_r&lt;bits&lt;4&gt; opc&gt; {
   <b>let </b>Predicates = [HasSSE2] in {
     <b>def </b>rr : Instruction&lt;opc, "rr"&gt;;
@@ -866,17 +871,16 @@ several levels of multiclass instanciations. This also avoids the need of using
 <div class="doc_section"><a name="codegen">Code Generator backend info</a></div>
 <!-- *********************************************************************** -->
 
-<div class="doc_text">
-
 <p>Expressions used by code generator to describe instructions and isel
 patterns:</p>
 
-<dl>
+<div class="doc_text">
+
 <dt><tt>(implicit a)</tt></dt>
   <dd>an implicitly defined physical register.  This tells the dag instruction
   selection emitter the input pattern's extra definitions matches implicit
   physical register definitions.</dd>
-</dl>
+
 </div>
 
 <!-- *********************************************************************** -->
@@ -902,7 +906,7 @@ This should highlight the APIs in <tt>TableGen/Record.h</tt>.</p>
 
   <a href="mailto:sabre@nondot.org">Chris Lattner</a><br>
   <a href="http://llvm.org">LLVM Compiler Infrastructure</a><br>
-  Last modified: $Date: 2010-10-31 17:22:57 -0200 (Sun, 31 Oct 2010) $
+  Last modified: $Date: 2010-06-21 15:35:09 -0500 (Mon, 21 Jun 2010) $
 </address>
 
 </body>

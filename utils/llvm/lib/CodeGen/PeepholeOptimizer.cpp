@@ -41,9 +41,7 @@
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 using namespace llvm;
 
@@ -52,13 +50,8 @@ static cl::opt<bool>
 Aggressive("aggressive-ext-opt", cl::Hidden,
            cl::desc("Aggressive extension optimization"));
 
-static cl::opt<bool>
-DisablePeephole("disable-peephole", cl::Hidden, cl::init(false),
-                cl::desc("Disable the peephole optimizer"));
-
 STATISTIC(NumReuse,      "Number of extension results reused");
 STATISTIC(NumEliminated, "Number of compares eliminated");
-STATISTIC(NumImmFold,    "Number of move immediate foled");
 
 namespace {
   class PeepholeOptimizer : public MachineFunctionPass {
@@ -69,9 +62,7 @@ namespace {
 
   public:
     static char ID; // Pass identification
-    PeepholeOptimizer() : MachineFunctionPass(ID) {
-      initializePeepholeOptimizerPass(*PassRegistry::getPassRegistry());
-    }
+    PeepholeOptimizer() : MachineFunctionPass(ID) {}
 
     virtual bool runOnMachineFunction(MachineFunction &MF);
 
@@ -88,21 +79,12 @@ namespace {
     bool OptimizeCmpInstr(MachineInstr *MI, MachineBasicBlock *MBB);
     bool OptimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
                           SmallPtrSet<MachineInstr*, 8> &LocalMIs);
-    bool isMoveImmediate(MachineInstr *MI,
-                         SmallSet<unsigned, 4> &ImmDefRegs,
-                         DenseMap<unsigned, MachineInstr*> &ImmDefMIs);
-    bool FoldImmediate(MachineInstr *MI, MachineBasicBlock *MBB,
-                       SmallSet<unsigned, 4> &ImmDefRegs,
-                       DenseMap<unsigned, MachineInstr*> &ImmDefMIs);
   };
 }
 
 char PeepholeOptimizer::ID = 0;
-INITIALIZE_PASS_BEGIN(PeepholeOptimizer, "peephole-opts",
-                "Peephole Optimizations", false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-INITIALIZE_PASS_END(PeepholeOptimizer, "peephole-opts",
-                "Peephole Optimizations", false, false)
+INITIALIZE_PASS(PeepholeOptimizer, "peephole-opts",
+                "Peephole Optimizations", false, false);
 
 FunctionPass *llvm::createPeepholeOptimizerPass() {
   return new PeepholeOptimizer();
@@ -120,10 +102,12 @@ FunctionPass *llvm::createPeepholeOptimizerPass() {
 bool PeepholeOptimizer::
 OptimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
                  SmallPtrSet<MachineInstr*, 8> &LocalMIs) {
+  LocalMIs.insert(MI);
+
   unsigned SrcReg, DstReg, SubIdx;
   if (!TII->isCoalescableExtInstr(*MI, SrcReg, DstReg, SubIdx))
     return false;
-  
+
   if (TargetRegisterInfo::isPhysicalRegister(DstReg) ||
       TargetRegisterInfo::isPhysicalRegister(SrcReg))
     return false;
@@ -248,17 +232,22 @@ OptimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
 /// set) the same flag as the compare, then we can remove the comparison and use
 /// the flag from the previous instruction.
 bool PeepholeOptimizer::OptimizeCmpInstr(MachineInstr *MI,
-                                         MachineBasicBlock *MBB){
+                                         MachineBasicBlock *MBB) {
   // If this instruction is a comparison against zero and isn't comparing a
   // physical register, we can try to optimize it.
   unsigned SrcReg;
-  int CmpMask, CmpValue;
-  if (!TII->AnalyzeCompare(MI, SrcReg, CmpMask, CmpValue) ||
-      TargetRegisterInfo::isPhysicalRegister(SrcReg))
+  int CmpValue;
+  if (!TII->AnalyzeCompare(MI, SrcReg, CmpValue) ||
+      TargetRegisterInfo::isPhysicalRegister(SrcReg) || CmpValue != 0)
     return false;
 
-  // Attempt to optimize the comparison instruction.
-  if (TII->OptimizeCompareInstr(MI, SrcReg, CmpMask, CmpValue, MRI)) {
+  MachineRegisterInfo::def_iterator DI = MRI->def_begin(SrcReg);
+  if (llvm::next(DI) != MRI->def_end())
+    // Only support one definition.
+    return false;
+
+  // Attempt to convert the defining instruction to set the "zero" flag.
+  if (TII->ConvertToSetZeroFlag(&*DI, MI)) {
     ++NumEliminated;
     return true;
   }
@@ -266,53 +255,7 @@ bool PeepholeOptimizer::OptimizeCmpInstr(MachineInstr *MI,
   return false;
 }
 
-bool PeepholeOptimizer::isMoveImmediate(MachineInstr *MI,
-                                        SmallSet<unsigned, 4> &ImmDefRegs,
-                                 DenseMap<unsigned, MachineInstr*> &ImmDefMIs) {
-  const TargetInstrDesc &TID = MI->getDesc();
-  if (!TID.isMoveImmediate())
-    return false;
-  if (TID.getNumDefs() != 1)
-    return false;
-  unsigned Reg = MI->getOperand(0).getReg();
-  if (TargetRegisterInfo::isVirtualRegister(Reg)) {
-    ImmDefMIs.insert(std::make_pair(Reg, MI));
-    ImmDefRegs.insert(Reg);
-    return true;
-  }
-  
-  return false;
-}
-
-/// FoldImmediate - Try folding register operands that are defined by move
-/// immediate instructions, i.e. a trivial constant folding optimization, if
-/// and only if the def and use are in the same BB.
-bool PeepholeOptimizer::FoldImmediate(MachineInstr *MI, MachineBasicBlock *MBB,
-                                      SmallSet<unsigned, 4> &ImmDefRegs,
-                                 DenseMap<unsigned, MachineInstr*> &ImmDefMIs) {
-  for (unsigned i = 0, e = MI->getDesc().getNumOperands(); i != e; ++i) {
-    MachineOperand &MO = MI->getOperand(i);
-    if (!MO.isReg() || MO.isDef())
-      continue;
-    unsigned Reg = MO.getReg();
-    if (!Reg || TargetRegisterInfo::isPhysicalRegister(Reg))
-      continue;
-    if (ImmDefRegs.count(Reg) == 0)
-      continue;
-    DenseMap<unsigned, MachineInstr*>::iterator II = ImmDefMIs.find(Reg);
-    assert(II != ImmDefMIs.end());
-    if (TII->FoldImmediate(MI, II->second, Reg, MRI)) {
-      ++NumImmFold;
-      return true;
-    }
-  }
-  return false;
-}
-
 bool PeepholeOptimizer::runOnMachineFunction(MachineFunction &MF) {
-  if (DisablePeephole)
-    return false;
-  
   TM  = &MF.getTarget();
   TII = TM->getInstrInfo();
   MRI = &MF.getRegInfo();
@@ -321,32 +264,21 @@ bool PeepholeOptimizer::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
   SmallPtrSet<MachineInstr*, 8> LocalMIs;
-  SmallSet<unsigned, 4> ImmDefRegs;
-  DenseMap<unsigned, MachineInstr*> ImmDefMIs;
   for (MachineFunction::iterator I = MF.begin(), E = MF.end(); I != E; ++I) {
     MachineBasicBlock *MBB = &*I;
-    
-    bool SeenMoveImm = false;
     LocalMIs.clear();
-    ImmDefRegs.clear();
-    ImmDefMIs.clear();
 
     for (MachineBasicBlock::iterator
-           MII = I->begin(), MIE = I->end(); MII != MIE; ) {
-      MachineInstr *MI = &*MII++;
-      LocalMIs.insert(MI);
+           MII = I->begin(), ME = I->end(); MII != ME; ) {
+      MachineInstr *MI = &*MII;
 
-      if (MI->getDesc().hasUnmodeledSideEffects())
-        continue;
-
-      if (MI->getDesc().isCompare()) {
+      if (MI->getDesc().isCompare() &&
+          !MI->getDesc().hasUnmodeledSideEffects()) {
+        ++MII; // The iterator may become invalid if the compare is deleted.
         Changed |= OptimizeCmpInstr(MI, MBB);
-      } else if (isMoveImmediate(MI, ImmDefRegs, ImmDefMIs)) {
-        SeenMoveImm = true;
       } else {
         Changed |= OptimizeExtInstr(MI, MBB, LocalMIs);
-        if (SeenMoveImm)
-          Changed |= FoldImmediate(MI, MBB, ImmDefRegs, ImmDefMIs);
+        ++MII;
       }
     }
   }

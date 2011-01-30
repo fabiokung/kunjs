@@ -22,12 +22,9 @@ const MCFixupKindInfo &MCCodeEmitter::getFixupKindInfo(MCFixupKind Kind) const {
     { "FK_Data_1", 0, 8, 0 },
     { "FK_Data_2", 0, 16, 0 },
     { "FK_Data_4", 0, 32, 0 },
-    { "FK_Data_8", 0, 64, 0 },
-    { "FK_PCRel_1", 0, 8, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_PCRel_2", 0, 16, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_PCRel_4", 0, 32, MCFixupKindInfo::FKF_IsPCRel }
+    { "FK_Data_8", 0, 64, 0 }
   };
   
-  assert(Kind <= 6 && "Unknown fixup kind");
+  assert(Kind <= 3 && "Unknown fixup kind");
   return Builtins[Kind];
 }

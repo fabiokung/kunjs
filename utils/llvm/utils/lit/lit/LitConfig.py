@@ -8,9 +8,6 @@ class LitConfig:
     easily.
     """
 
-    # Provide access to Test module.
-    import Test
-
     # Provide access to built-in formats.
     import LitFormats as formats
 

@@ -40,7 +40,6 @@
   	<li><a href="#llvm_eh_sjlj_longjmp"><tt>llvm.eh.sjlj.longjmp</tt></a></li>
   	<li><a href="#llvm_eh_sjlj_lsda"><tt>llvm.eh.sjlj.lsda</tt></a></li>
   	<li><a href="#llvm_eh_sjlj_callsite"><tt>llvm.eh.sjlj.callsite</tt></a></li>
-  	<li><a href="#llvm_eh_sjlj_dispatchsetup"><tt>llvm.eh.sjlj.dispatchsetup</tt></a></li>
   </ol></li>
   <li><a href="#asm">Asm Table Formats</a>
   <ol>
@@ -549,23 +548,6 @@
 </div>
 
 <!-- ======================================================================= -->
-<div class="doc_subsubsection">
-  <a name="llvm_eh_sjlj_dispatchsetup">llvm.eh.sjlj.dispatchsetup</a>
-</div>
-
-<div class="doc_text">
-
-<pre>
-  void %<a href="#llvm_eh_sjlj_dispatchsetup">llvm.eh.sjlj.dispatchsetup</a>(i32)
-</pre>
-
-<p>For SJLJ based exception handling, the <a href="#llvm_eh_sjlj_dispatchsetup">
-  <tt>llvm.eh.sjlj.dispatchsetup</tt></a> intrinsic is used by targets to do
-  any unwind-edge setup they need. By default, no action is taken.  </p>
-
-</div>
-
-<!-- ======================================================================= -->
 <div class="doc_section">
   <a name="asm">Asm Table Formats</a>
 </div>
@@ -637,7 +619,7 @@
 
   <a href="mailto:sabre@nondot.org">Chris Lattner</a><br>
   <a href="http://llvm.org">LLVM Compiler Infrastructure</a><br>
-  Last modified: $Date: 2010-10-19 21:27:08 -0200 (Tue, 19 Oct 2010) $
+  Last modified: $Date: 2010-05-28 12:07:41 -0500 (Fri, 28 May 2010) $
 </address>
 
 </body>

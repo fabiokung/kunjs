@@ -1,4 +1,4 @@
-// RUN: %llvmgcc -S -fnested-functions -O0 -o - %s 
+// RUN: %llvmgcc -S -fnested-functions -O0 -o - -emit-llvm %s 
 // PR915
 
 extern void abort(void);

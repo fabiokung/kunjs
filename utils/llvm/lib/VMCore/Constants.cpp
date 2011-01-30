@@ -40,25 +40,22 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 
 // Constructor to create a '0' constant of arbitrary type...
+static const uint64_t zero[2] = {0, 0};
 Constant *Constant::getNullValue(const Type *Ty) {
   switch (Ty->getTypeID()) {
   case Type::IntegerTyID:
     return ConstantInt::get(Ty, 0);
   case Type::FloatTyID:
-    return ConstantFP::get(Ty->getContext(),
-                           APFloat::getZero(APFloat::IEEEsingle));
+    return ConstantFP::get(Ty->getContext(), APFloat(APInt(32, 0)));
   case Type::DoubleTyID:
-    return ConstantFP::get(Ty->getContext(),
-                           APFloat::getZero(APFloat::IEEEdouble));
+    return ConstantFP::get(Ty->getContext(), APFloat(APInt(64, 0)));
   case Type::X86_FP80TyID:
-    return ConstantFP::get(Ty->getContext(),
-                           APFloat::getZero(APFloat::x87DoubleExtended));
+    return ConstantFP::get(Ty->getContext(), APFloat(APInt(80, 2, zero)));
   case Type::FP128TyID:
     return ConstantFP::get(Ty->getContext(),
-                           APFloat::getZero(APFloat::IEEEquad));
+                           APFloat(APInt(128, 2, zero), true));
   case Type::PPC_FP128TyID:
-    return ConstantFP::get(Ty->getContext(),
-                           APFloat(APInt::getNullValue(128)));
+    return ConstantFP::get(Ty->getContext(), APFloat(APInt(128, 2, zero)));
   case Type::PointerTyID:
     return ConstantPointerNull::get(cast<PointerType>(Ty));
   case Type::StructTyID:
@@ -268,16 +265,20 @@ ConstantInt::ConstantInt(const IntegerType *Ty, const APInt& V)
 
 ConstantInt* ConstantInt::getTrue(LLVMContext &Context) {
   LLVMContextImpl *pImpl = Context.pImpl;
-  if (!pImpl->TheTrueVal)
-    pImpl->TheTrueVal = ConstantInt::get(Type::getInt1Ty(Context), 1);
-  return pImpl->TheTrueVal;
+  if (pImpl->TheTrueVal)
+    return pImpl->TheTrueVal;
+  else
+    return (pImpl->TheTrueVal =
+              ConstantInt::get(IntegerType::get(Context, 1), 1));
 }
 
 ConstantInt* ConstantInt::getFalse(LLVMContext &Context) {
   LLVMContextImpl *pImpl = Context.pImpl;
-  if (!pImpl->TheFalseVal)
-    pImpl->TheFalseVal = ConstantInt::get(Type::getInt1Ty(Context), 0);
-  return pImpl->TheFalseVal;
+  if (pImpl->TheFalseVal)
+    return pImpl->TheFalseVal;
+  else
+    return (pImpl->TheFalseVal =
+              ConstantInt::get(IntegerType::get(Context, 1), 0));
 }
 
 

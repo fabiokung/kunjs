@@ -81,9 +81,13 @@ private:
   SDNode *getGlobalBaseReg();
   SDNode *Select(SDNode *N);
 
+  // Complex Pattern.
+  bool SelectAddr(SDNode *Op, SDValue N,
+                  SDValue &Base, SDValue &Offset);
+
   // Address Selection
-  bool SelectAddrRegReg(SDValue N, SDValue &Base, SDValue &Index);
-  bool SelectAddrRegImm(SDValue N, SDValue &Disp, SDValue &Base);
+  bool SelectAddrRegReg(SDNode *Op, SDValue N, SDValue &Base, SDValue &Index);
+  bool SelectAddrRegImm(SDNode *Op, SDValue N, SDValue &Disp, SDValue &Base);
 
   // getI32Imm - Return a target constant with the specified value, of type i32.
   inline SDValue getI32Imm(unsigned Imm) {
@@ -118,7 +122,7 @@ static bool isIntS32Immediate(SDValue Op, int32_t &Imm) {
 /// can be represented as an indexed [r+r] operation.  Returns false if it
 /// can be more efficiently represented with [r+imm].
 bool MBlazeDAGToDAGISel::
-SelectAddrRegReg(SDValue N, SDValue &Base, SDValue &Index) {
+SelectAddrRegReg(SDNode *Op, SDValue N, SDValue &Base, SDValue &Index) {
   if (N.getOpcode() == ISD::FrameIndex) return false;
   if (N.getOpcode() == ISD::TargetExternalSymbol ||
       N.getOpcode() == ISD::TargetGlobalAddress)
@@ -133,8 +137,8 @@ SelectAddrRegReg(SDValue N, SDValue &Base, SDValue &Index) {
         N.getOperand(1).getOpcode() == ISD::TargetJumpTable)
       return false; // jump tables.
 
-    Base = N.getOperand(0);
-    Index = N.getOperand(1);
+    Base = N.getOperand(1);
+    Index = N.getOperand(0);
     return true;
   }
 
@@ -145,9 +149,9 @@ SelectAddrRegReg(SDValue N, SDValue &Base, SDValue &Index) {
 /// a signed 32-bit displacement [r+imm], and if it is not better
 /// represented as reg+reg.
 bool MBlazeDAGToDAGISel::
-SelectAddrRegImm(SDValue N, SDValue &Base, SDValue &Disp) {
+SelectAddrRegImm(SDNode *Op, SDValue N, SDValue &Disp, SDValue &Base) {
   // If this can be more profitably realized as r+r, fail.
-  if (SelectAddrRegReg(N, Base, Disp))
+  if (SelectAddrRegReg(Op, N, Disp, Base))
     return false;
 
   if (N.getOpcode() == ISD::ADD || N.getOpcode() == ISD::OR) {
@@ -159,6 +163,7 @@ SelectAddrRegImm(SDValue N, SDValue &Base, SDValue &Disp) {
       } else {
         Base = N.getOperand(0);
       }
+      DEBUG( errs() << "WESLEY: Using Operand Immediate\n" );
       return true; // [r+i]
     }
   } else if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N)) {
@@ -166,6 +171,7 @@ SelectAddrRegImm(SDValue N, SDValue &Base, SDValue &Disp) {
     uint32_t Imm = CN->getZExtValue();
     Disp = CurDAG->getTargetConstant(Imm, CN->getValueType(0));
     Base = CurDAG->getRegister(MBlaze::R0, CN->getValueType(0));
+    DEBUG( errs() << "WESLEY: Using Constant Node\n" );
     return true;
   }
 
@@ -184,21 +190,76 @@ SDNode *MBlazeDAGToDAGISel::getGlobalBaseReg() {
   return CurDAG->getRegister(GlobalBaseReg, TLI.getPointerTy()).getNode();
 }
 
+/// ComplexPattern used on MBlazeInstrInfo
+/// Used on MBlaze Load/Store instructions
+bool MBlazeDAGToDAGISel::
+SelectAddr(SDNode *Op, SDValue Addr, SDValue &Offset, SDValue &Base) {
+  // if Address is FI, get the TargetFrameIndex.
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    Base   = CurDAG->getTargetFrameIndex(FIN->getIndex(), MVT::i32);
+    Offset = CurDAG->getTargetConstant(0, MVT::i32);
+    return true;
+  }
+
+  // on PIC code Load GA
+  if (TM.getRelocationModel() == Reloc::PIC_) {
+    if ((Addr.getOpcode() == ISD::TargetGlobalAddress) ||
+        (Addr.getOpcode() == ISD::TargetConstantPool) ||
+        (Addr.getOpcode() == ISD::TargetJumpTable)){
+      Base   = CurDAG->getRegister(MBlaze::R15, MVT::i32);
+      Offset = Addr;
+      return true;
+    }
+  } else {
+    if ((Addr.getOpcode() == ISD::TargetExternalSymbol ||
+        Addr.getOpcode() == ISD::TargetGlobalAddress))
+      return false;
+  }
+
+  // Operand is a result from an ADD.
+  if (Addr.getOpcode() == ISD::ADD) {
+    if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+      if (isUInt<16>(CN->getZExtValue())) {
+
+        // If the first operand is a FI, get the TargetFI Node
+        if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>
+                                    (Addr.getOperand(0))) {
+          Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), MVT::i32);
+        } else {
+          Base = Addr.getOperand(0);
+        }
+
+        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), MVT::i32);
+        return true;
+      }
+    }
+  }
+
+  Base   = Addr;
+  Offset = CurDAG->getTargetConstant(0, MVT::i32);
+  return true;
+}
+
 /// Select instructions not customized! Used for
 /// expanded, promoted and normal instructions
 SDNode* MBlazeDAGToDAGISel::Select(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
   DebugLoc dl = Node->getDebugLoc();
 
+  // Dump information about the Node being selected
+  DEBUG(errs() << "Selecting: "; Node->dump(CurDAG); errs() << "\n");
+
   // If we have a custom node, we already have selected!
-  if (Node->isMachineOpcode())
+  if (Node->isMachineOpcode()) {
+    DEBUG(errs() << "== "; Node->dump(CurDAG); errs() << "\n");
     return NULL;
+  }
 
   ///
   // Instruction Selection not handled by the auto-generated
   // tablegen selection should be handled here.
   ///
-  switch (Opcode) {
+  switch(Opcode) {
     default: break;
 
     // Get target GOT address.
@@ -228,8 +289,8 @@ SDNode* MBlazeDAGToDAGISel::Select(SDNode *Node) {
         SDValue R20Reg = CurDAG->getRegister(MBlaze::R20, MVT::i32);
         SDValue InFlag(0, 0);
 
-        if ((isa<GlobalAddressSDNode>(Callee)) ||
-            (isa<ExternalSymbolSDNode>(Callee)))
+        if ( (isa<GlobalAddressSDNode>(Callee)) ||
+             (isa<ExternalSymbolSDNode>(Callee)) )
         {
           /// Direct call for global addresses and external symbols
           SDValue GPReg = CurDAG->getRegister(MBlaze::R15, MVT::i32);

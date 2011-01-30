@@ -11,7 +11,7 @@
 #define LLVM_MC_MCASMLEXER_H
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include "llvm/Support/SMLoc.h"
 
 namespace llvm {
@@ -32,9 +32,6 @@ public:
     
     // Integer values.
     Integer,
-    
-    // Real values.
-    Real,
     
     // Register values (stored in IntVal).  Only used by TargetAsmLexer.
     Register,

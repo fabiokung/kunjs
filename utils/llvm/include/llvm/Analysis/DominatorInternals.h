@@ -116,7 +116,7 @@ unsigned DFSPass(DominatorTreeBase<typename GraphT::NodeType>& DT,
 template<class GraphT>
 void Compress(DominatorTreeBase<typename GraphT::NodeType>& DT,
               typename GraphT::NodeType *VIn) {
-  SmallVector<typename GraphT::NodeType*, 32> Work;
+  std::vector<typename GraphT::NodeType*> Work;
   SmallPtrSet<typename GraphT::NodeType*, 32> Visited;
   typename DominatorTreeBase<typename GraphT::NodeType>::InfoRec &VInVAInfo =
                                       DT.Info[DT.Vertex[DT.Info[VIn].Ancestor]];
@@ -278,16 +278,9 @@ void Calculate(DominatorTreeBase<typename GraphTraits<NodeT>::NodeType>& DT,
       }
     }
 
+    DT.Info[DT.Vertex[WInfo.Semi]].Bucket.push_back(W);
+
     typename GraphT::NodeType* WParent = DT.Vertex[WInfo.Parent];
-
-    // If V is a non-root vertex and sdom(V) = parent(V), then idom(V) is
-    // necessarily parent(V). In this case, set idom(V) here and avoid placing
-    // V into a bucket.
-    if (WInfo.Semi == WInfo.Parent)
-      DT.IDoms[W] = WParent;
-    else
-      DT.Info[DT.Vertex[WInfo.Semi]].Bucket.push_back(W);
-
     Link<GraphT>(DT, WInfo.Parent, W, WInfo);
 
     // Step #3: Implicitly define the immediate dominator of vertices

@@ -26,7 +26,7 @@
 #ifndef LLVM_ADT_STATISTIC_H
 #define LLVM_ADT_STATISTIC_H
 
-#include "llvm/Support/Atomic.h"
+#include "llvm/System/Atomic.h"
 
 namespace llvm {
 class raw_ostream;

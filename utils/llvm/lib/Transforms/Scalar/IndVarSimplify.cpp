@@ -77,9 +77,7 @@ namespace {
   public:
 
     static char ID; // Pass identification, replacement for typeid
-    IndVarSimplify() : LoopPass(ID) {
-      initializeIndVarSimplifyPass(*PassRegistry::getPassRegistry());
-    }
+    IndVarSimplify() : LoopPass(ID) {}
 
     virtual bool runOnLoop(Loop *L, LPPassManager &LPM);
 
@@ -119,16 +117,8 @@ namespace {
 }
 
 char IndVarSimplify::ID = 0;
-INITIALIZE_PASS_BEGIN(IndVarSimplify, "indvars",
-                "Canonicalize Induction Variables", false, false)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
-INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
-INITIALIZE_PASS_DEPENDENCY(LCSSA)
-INITIALIZE_PASS_DEPENDENCY(IVUsers)
-INITIALIZE_PASS_END(IndVarSimplify, "indvars",
-                "Canonicalize Induction Variables", false, false)
+INITIALIZE_PASS(IndVarSimplify, "indvars",
+                "Canonicalize Induction Variables", false, false);
 
 Pass *llvm::createIndVarSimplifyPass() {
   return new IndVarSimplify();
@@ -200,7 +190,7 @@ ICmpInst *IndVarSimplify::LinearFunctionTestReplace(Loop *L,
   }
 
   // Expand the code for the iteration count.
-  assert(SE->isLoopInvariant(RHS, L) &&
+  assert(RHS->isLoopInvariant(L) &&
          "Computed iteration count is not loop invariant!");
   Value *ExitCnt = Rewriter.expandCodeFor(RHS, IndVar->getType(), BI);
 
@@ -302,7 +292,7 @@ void IndVarSimplify::RewriteLoopExitValues(Loop *L,
         // and varies predictably *inside* the loop.  Evaluate the value it
         // contains when the loop exits, if possible.
         const SCEV *ExitValue = SE->getSCEVAtScope(Inst, L->getParentLoop());
-        if (!SE->isLoopInvariant(ExitValue, L))
+        if (!ExitValue->isLoopInvariant(L))
           continue;
 
         Changed = true;
@@ -356,7 +346,7 @@ void IndVarSimplify::RewriteNonIntegerIVs(Loop *L) {
     PHIs.push_back(PN);
 
   for (unsigned i = 0, e = PHIs.size(); i != e; ++i)
-    if (PHINode *PN = dyn_cast_or_null<PHINode>(&*PHIs[i]))
+    if (PHINode *PN = dyn_cast_or_null<PHINode>(PHIs[i]))
       HandleFloatingPointIV(L, PN);
 
   // If the loop previously had floating-point IV, ScalarEvolution
@@ -405,7 +395,7 @@ void IndVarSimplify::EliminateIVComparisons() {
   // which are now dead.
   while (!DeadInsts.empty())
     if (Instruction *Inst =
-        dyn_cast_or_null<Instruction>(&*DeadInsts.pop_back_val()))
+          dyn_cast_or_null<Instruction>(DeadInsts.pop_back_val()))
       RecursivelyDeleteTriviallyDeadInstructions(Inst);
 }
 
@@ -472,7 +462,7 @@ void IndVarSimplify::EliminateIVRemainders() {
   // which are now dead.
   while (!DeadInsts.empty())
     if (Instruction *Inst =
-          dyn_cast_or_null<Instruction>(&*DeadInsts.pop_back_val()))
+          dyn_cast_or_null<Instruction>(DeadInsts.pop_back_val()))
       RecursivelyDeleteTriviallyDeadInstructions(Inst);
 }
 
@@ -617,9 +607,9 @@ bool IndVarSimplify::runOnLoop(Loop *L, LPPassManager &LPM) {
 // currently can only reduce affine polynomials.  For now just disable
 // indvar subst on anything more complex than an affine addrec, unless
 // it can be expanded to a trivial value.
-static bool isSafe(const SCEV *S, const Loop *L, ScalarEvolution *SE) {
+static bool isSafe(const SCEV *S, const Loop *L) {
   // Loop-invariant values are safe.
-  if (SE->isLoopInvariant(S, L)) return true;
+  if (S->isLoopInvariant(L)) return true;
 
   // Affine addrecs are safe. Non-affine are not, because LSR doesn't know how
   // to transform them into efficient code.
@@ -630,18 +620,18 @@ static bool isSafe(const SCEV *S, const Loop *L, ScalarEvolution *SE) {
   if (const SCEVCommutativeExpr *Commutative = dyn_cast<SCEVCommutativeExpr>(S)) {
     for (SCEVCommutativeExpr::op_iterator I = Commutative->op_begin(),
          E = Commutative->op_end(); I != E; ++I)
-      if (!isSafe(*I, L, SE)) return false;
+      if (!isSafe(*I, L)) return false;
     return true;
   }
   
   // A cast is safe if its operand is.
   if (const SCEVCastExpr *C = dyn_cast<SCEVCastExpr>(S))
-    return isSafe(C->getOperand(), L, SE);
+    return isSafe(C->getOperand(), L);
 
   // A udiv is safe if its operands are.
   if (const SCEVUDivExpr *UD = dyn_cast<SCEVUDivExpr>(S))
-    return isSafe(UD->getLHS(), L, SE) &&
-           isSafe(UD->getRHS(), L, SE);
+    return isSafe(UD->getLHS(), L) &&
+           isSafe(UD->getRHS(), L);
 
   // SCEVUnknown is always safe.
   if (isa<SCEVUnknown>(S))
@@ -672,7 +662,7 @@ void IndVarSimplify::RewriteIVExpressions(Loop *L, SCEVExpander &Rewriter) {
     // Evaluate the expression out of the loop, if possible.
     if (!L->contains(UI->getUser())) {
       const SCEV *ExitVal = SE->getSCEVAtScope(AR, L->getParentLoop());
-      if (SE->isLoopInvariant(ExitVal, L))
+      if (ExitVal->isLoopInvariant(L))
         AR = ExitVal;
     }
 
@@ -682,7 +672,7 @@ void IndVarSimplify::RewriteIVExpressions(Loop *L, SCEVExpander &Rewriter) {
     // currently can only reduce affine polynomials.  For now just disable
     // indvar subst on anything more complex than an affine addrec, unless
     // it can be expanded to a trivial value.
-    if (!isSafe(AR, L, SE))
+    if (!isSafe(AR, L))
       continue;
 
     // Determine the insertion point for this user. By default, insert
@@ -735,7 +725,7 @@ void IndVarSimplify::RewriteIVExpressions(Loop *L, SCEVExpander &Rewriter) {
   // which are now dead.
   while (!DeadInsts.empty())
     if (Instruction *Inst =
-          dyn_cast_or_null<Instruction>(&*DeadInsts.pop_back_val()))
+          dyn_cast_or_null<Instruction>(DeadInsts.pop_back_val()))
       RecursivelyDeleteTriviallyDeadInstructions(Inst);
 }
 

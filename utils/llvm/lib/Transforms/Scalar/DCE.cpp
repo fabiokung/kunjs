@@ -35,9 +35,7 @@ namespace {
   //
   struct DeadInstElimination : public BasicBlockPass {
     static char ID; // Pass identification, replacement for typeid
-    DeadInstElimination() : BasicBlockPass(ID) {
-      initializeDeadInstEliminationPass(*PassRegistry::getPassRegistry());
-    }
+    DeadInstElimination() : BasicBlockPass(ID) {}
     virtual bool runOnBasicBlock(BasicBlock &BB) {
       bool Changed = false;
       for (BasicBlock::iterator DI = BB.begin(); DI != BB.end(); ) {
@@ -59,7 +57,7 @@ namespace {
 
 char DeadInstElimination::ID = 0;
 INITIALIZE_PASS(DeadInstElimination, "die",
-                "Dead Instruction Elimination", false, false)
+                "Dead Instruction Elimination", false, false);
 
 Pass *llvm::createDeadInstEliminationPass() {
   return new DeadInstElimination();
@@ -72,9 +70,7 @@ namespace {
   //
   struct DCE : public FunctionPass {
     static char ID; // Pass identification, replacement for typeid
-    DCE() : FunctionPass(ID) {
-      initializeDCEPass(*PassRegistry::getPassRegistry());
-    }
+    DCE() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F);
 
@@ -85,7 +81,7 @@ namespace {
 }
 
 char DCE::ID = 0;
-INITIALIZE_PASS(DCE, "dce", "Dead Code Elimination", false, false)
+INITIALIZE_PASS(DCE, "dce", "Dead Code Elimination", false, false);
 
 bool DCE::runOnFunction(Function &F) {
   // Start out with all of the instructions in the worklist...

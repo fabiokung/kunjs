@@ -29,9 +29,7 @@ namespace {
 class StripDeadPrototypesPass : public ModulePass {
 public:
   static char ID; // Pass identification, replacement for typeid
-  StripDeadPrototypesPass() : ModulePass(ID) {
-    initializeStripDeadPrototypesPassPass(*PassRegistry::getPassRegistry());
-  }
+  StripDeadPrototypesPass() : ModulePass(ID) { }
   virtual bool runOnModule(Module &M);
 };
 
@@ -39,7 +37,7 @@ public:
 
 char StripDeadPrototypesPass::ID = 0;
 INITIALIZE_PASS(StripDeadPrototypesPass, "strip-dead-prototypes",
-                "Strip Unused Function Prototypes", false, false)
+                "Strip Unused Function Prototypes", false, false);
 
 bool StripDeadPrototypesPass::runOnModule(Module &M) {
   bool MadeChange = false;

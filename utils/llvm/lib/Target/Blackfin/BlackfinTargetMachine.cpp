@@ -33,7 +33,7 @@ BlackfinTargetMachine::BlackfinTargetMachine(const Target &T,
     TLInfo(*this),
     TSInfo(*this),
     InstrInfo(Subtarget),
-    FrameInfo(Subtarget) {
+    FrameInfo(TargetFrameInfo::StackGrowsDown, 4, 0) {
 }
 
 bool BlackfinTargetMachine::addInstSelector(PassManagerBase &PM,

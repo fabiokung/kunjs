@@ -1,6 +1,5 @@
 ; RUN: llc < %s -march=arm | FileCheck %s -check-prefix=GENERIC
 ; RUN: llc < %s -mtriple=armv6-apple-darwin | FileCheck %s -check-prefix=DARWIN_V6
-; RUN: llc < %s -mtriple=armv6-apple-darwin -arm-strict-align | FileCheck %s -check-prefix=GENERIC
 ; RUN: llc < %s -mtriple=armv6-linux | FileCheck %s -check-prefix=GENERIC
 
 ; rdar://7113725

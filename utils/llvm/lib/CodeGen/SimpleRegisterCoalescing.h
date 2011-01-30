@@ -21,7 +21,7 @@
 
 namespace llvm {
   class SimpleRegisterCoalescing;
-  class LiveDebugVariables;
+  class LiveVariables;
   class TargetRegisterInfo;
   class TargetInstrInfo;
   class VirtRegMap;
@@ -44,7 +44,6 @@ namespace llvm {
     const TargetRegisterInfo* tri_;
     const TargetInstrInfo* tii_;
     LiveIntervals *li_;
-    LiveDebugVariables *ldv_;
     const MachineLoopInfo* loopInfo;
     AliasAnalysis *AA;
     
@@ -64,9 +63,7 @@ namespace llvm {
 
   public:
     static char ID; // Pass identifcation, replacement for typeid
-    SimpleRegisterCoalescing() : MachineFunctionPass(ID) {
-      initializeSimpleRegisterCoalescingPass(*PassRegistry::getPassRegistry());
-    }
+    SimpleRegisterCoalescing() : MachineFunctionPass(ID) {}
 
     struct InstrSlots {
       enum {

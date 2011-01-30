@@ -10,9 +10,8 @@
 #ifndef LLVM_MC_MCOBJECTWRITER_H
 #define LLVM_MC_MCOBJECTWRITER_H
 
-#include "llvm/ADT/Triple.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include <cassert>
 
 namespace llvm {
@@ -76,22 +75,12 @@ public:
                                 const MCFixup &Fixup, MCValue Target,
                                 uint64_t &FixedValue) = 0;
 
-  /// Check if a fixup is fully resolved.
-  ///
-  /// This routine is used by the assembler to let the file format decide
-  /// if a fixup is not fully resolved. For example, one that crosses
-  /// two sections on ELF.
-  virtual bool IsFixupFullyResolved(const MCAssembler &Asm,
-                                    const MCValue Target,
-                                    bool IsPCRel,
-                                    const MCFragment *DF) const = 0;
-
   /// Write the object file.
   ///
   /// This routine is called by the assembler after layout and relaxation is
   /// complete, fixups have been evaluated and applied, and relocations
   /// generated.
-  virtual void WriteObject(MCAssembler &Asm,
+  virtual void WriteObject(const MCAssembler &Asm,
                            const MCAsmLayout &Layout) = 0;
 
   /// @}
@@ -171,20 +160,8 @@ public:
   }
 
   /// @}
-
-  /// Utility function to encode a SLEB128 value.
-  static void EncodeSLEB128(int64_t Value, raw_ostream &OS);
-  /// Utility function to encode a ULEB128 value.
-  static void EncodeULEB128(uint64_t Value, raw_ostream &OS);
 };
 
-MCObjectWriter *createMachObjectWriter(raw_ostream &OS, bool is64Bit,
-                                       uint32_t CPUType, uint32_t CPUSubtype,
-                                       bool IsLittleEndian);
-MCObjectWriter *createELFObjectWriter(raw_ostream &OS, bool is64Bit,
-                                      Triple::OSType OSType, uint16_t EMachine,
-                                      bool IsLittleEndian,
-                                      bool HasRelocationAddend);
 MCObjectWriter *createWinCOFFObjectWriter(raw_ostream &OS, bool is64Bit);
 
 } // End llvm namespace

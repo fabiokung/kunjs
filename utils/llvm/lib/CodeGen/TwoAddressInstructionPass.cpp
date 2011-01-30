@@ -138,9 +138,7 @@ namespace {
 
   public:
     static char ID; // Pass identification, replacement for typeid
-    TwoAddressInstructionPass() : MachineFunctionPass(ID) {
-      initializeTwoAddressInstructionPassPass(*PassRegistry::getPassRegistry());
-    }
+    TwoAddressInstructionPass() : MachineFunctionPass(ID) {}
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       AU.setPreservesCFG();
@@ -161,11 +159,8 @@ namespace {
 }
 
 char TwoAddressInstructionPass::ID = 0;
-INITIALIZE_PASS_BEGIN(TwoAddressInstructionPass, "twoaddressinstruction",
-                "Two-Address instruction pass", false, false)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_END(TwoAddressInstructionPass, "twoaddressinstruction",
-                "Two-Address instruction pass", false, false)
+INITIALIZE_PASS(TwoAddressInstructionPass, "twoaddressinstruction",
+                "Two-Address instruction pass", false, false);
 
 char &llvm::TwoAddressInstructionPassID = TwoAddressInstructionPass::ID;
 
@@ -1351,6 +1346,7 @@ TwoAddressInstructionPass::CoalesceExtSubRegs(SmallVector<unsigned,4> &Srcs,
       continue;
 
     // Insert a copy to replace the original.
+    MachineBasicBlock::iterator InsertLoc = SomeMI;
     MachineInstr *CopyMI = BuildMI(*SomeMI->getParent(), SomeMI,
                                    SomeMI->getDebugLoc(),
                                    TII->get(TargetOpcode::COPY))

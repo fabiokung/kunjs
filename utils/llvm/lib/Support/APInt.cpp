@@ -361,7 +361,7 @@ APInt& APInt::operator*=(const APInt& RHS) {
   unsigned rhsWords = !rhsBits ? 0 : whichWord(rhsBits - 1) + 1;
   if (!rhsWords) {
     // X * 0 ===> 0
-    clearAllBits();
+    clear();
     return *this;
   }
 
@@ -373,7 +373,7 @@ APInt& APInt::operator*=(const APInt& RHS) {
   mul(dest, pVal, lhsWords, RHS.pVal, rhsWords);
 
   // Copy result back into *this
-  clearAllBits();
+  clear();
   unsigned wordsToCopy = destWords >= getNumWords() ? getNumWords() : destWords;
   memcpy(pVal, dest, wordsToCopy * APINT_WORD_SIZE);
 
@@ -483,7 +483,6 @@ APInt APInt::operator-(const APInt& RHS) const {
 }
 
 bool APInt::operator[](unsigned bitPosition) const {
-  assert(bitPosition < getBitWidth() && "Bit position out of bounds!");
   return (maskBit(bitPosition) &
           (isSingleWord() ?  VAL : pVal[whichWord(bitPosition)])) != 0;
 }
@@ -562,12 +561,12 @@ bool APInt::slt(const APInt& RHS) const {
   bool rhsNeg = rhs.isNegative();
   if (lhsNeg) {
     // Sign bit is set so perform two's complement to make it positive
-    lhs.flipAllBits();
+    lhs.flip();
     lhs++;
   }
   if (rhsNeg) {
     // Sign bit is set so perform two's complement to make it positive
-    rhs.flipAllBits();
+    rhs.flip();
     rhs++;
   }
 
@@ -584,20 +583,22 @@ bool APInt::slt(const APInt& RHS) const {
     return lhs.ult(rhs);
 }
 
-void APInt::setBit(unsigned bitPosition) {
+APInt& APInt::set(unsigned bitPosition) {
   if (isSingleWord())
     VAL |= maskBit(bitPosition);
   else
     pVal[whichWord(bitPosition)] |= maskBit(bitPosition);
+  return *this;
 }
 
 /// Set the given bit to 0 whose position is given as "bitPosition".
 /// @brief Set a given bit to 0.
-void APInt::clearBit(unsigned bitPosition) {
+APInt& APInt::clear(unsigned bitPosition) {
   if (isSingleWord())
     VAL &= ~maskBit(bitPosition);
   else
     pVal[whichWord(bitPosition)] &= ~maskBit(bitPosition);
+  return *this;
 }
 
 /// @brief Toggle every bit to its opposite value.
@@ -605,10 +606,11 @@ void APInt::clearBit(unsigned bitPosition) {
 /// Toggle a given bit to its opposite value whose position is given
 /// as "bitPosition".
 /// @brief Toggles a given bit to its opposite value.
-void APInt::flipBit(unsigned bitPosition) {
+APInt& APInt::flip(unsigned bitPosition) {
   assert(bitPosition < BitWidth && "Out of the bit-width range!");
-  if ((*this)[bitPosition]) clearBit(bitPosition);
-  else setBit(bitPosition);
+  if ((*this)[bitPosition]) clear(bitPosition);
+  else set(bitPosition);
+  return *this;
 }
 
 unsigned APInt::getBitsNeeded(StringRef str, uint8_t radix) {
@@ -757,6 +759,10 @@ APInt APInt::getHiBits(unsigned numBits) const {
 APInt APInt::getLoBits(unsigned numBits) const {
   return APIntOps::lshr(APIntOps::shl(*this, BitWidth - numBits),
                         BitWidth - numBits);
+}
+
+bool APInt::isPowerOf2() const {
+  return (!!*this) && !(*this & (*this - APInt(BitWidth,1)));
 }
 
 unsigned APInt::countLeadingZerosSlowCase() const {
@@ -1867,7 +1873,7 @@ void APInt::divide(const APInt LHS, unsigned lhsWords,
       if (!Quotient->isSingleWord())
         Quotient->pVal = getClearedMemory(Quotient->getNumWords());
     } else
-      Quotient->clearAllBits();
+      Quotient->clear();
 
     // The quotient is in Q. Reconstitute the quotient into Quotient's low
     // order words.
@@ -1898,7 +1904,7 @@ void APInt::divide(const APInt LHS, unsigned lhsWords,
       if (!Remainder->isSingleWord())
         Remainder->pVal = getClearedMemory(Remainder->getNumWords());
     } else
-      Remainder->clearAllBits();
+      Remainder->clear();
 
     // The remainder is in R. Reconstitute the remainder into Remainder's low
     // order words.
@@ -2040,64 +2046,6 @@ void APInt::udivrem(const APInt &LHS, const APInt &RHS,
   divide(LHS, lhsWords, RHS, rhsWords, &Quotient, &Remainder);
 }
 
-APInt APInt::sadd_ov(const APInt &RHS, bool &Overflow) const {
-  APInt Res = *this+RHS;
-  Overflow = isNonNegative() == RHS.isNonNegative() &&
-             Res.isNonNegative() != isNonNegative();
-  return Res;
-}
-
-APInt APInt::uadd_ov(const APInt &RHS, bool &Overflow) const {
-  APInt Res = *this+RHS;
-  Overflow = Res.ult(RHS);
-  return Res;
-}
-
-APInt APInt::ssub_ov(const APInt &RHS, bool &Overflow) const {
-  APInt Res = *this - RHS;
-  Overflow = isNonNegative() != RHS.isNonNegative() &&
-             Res.isNonNegative() != isNonNegative();
-  return Res;
-}
-
-APInt APInt::usub_ov(const APInt &RHS, bool &Overflow) const {
-  APInt Res = *this-RHS;
-  Overflow = Res.ugt(*this);
-  return Res;
-}
-
-APInt APInt::sdiv_ov(const APInt &RHS, bool &Overflow) const {
-  // MININT/-1  -->  overflow.
-  Overflow = isMinSignedValue() && RHS.isAllOnesValue();
-  return sdiv(RHS);
-}
-
-APInt APInt::smul_ov(const APInt &RHS, bool &Overflow) const {
-  APInt Res = *this * RHS;
-  
-  if (*this != 0 && RHS != 0)
-    Overflow = Res.sdiv(RHS) != *this || Res.sdiv(*this) != RHS;
-  else
-    Overflow = false;
-  return Res;
-}
-
-APInt APInt::sshl_ov(unsigned ShAmt, bool &Overflow) const {
-  Overflow = ShAmt >= getBitWidth();
-  if (Overflow)
-    ShAmt = getBitWidth()-1;
-
-  if (isNonNegative()) // Don't allow sign change.
-    Overflow = ShAmt >= countLeadingZeros();
-  else
-    Overflow = ShAmt >= countLeadingOnes();
-  
-  return *this << ShAmt;
-}
-
-
-
-
 void APInt::fromString(unsigned numbits, StringRef str, uint8_t radix) {
   // Check our assumptions here
   assert(!str.empty() && "Invalid string length");
@@ -2153,7 +2101,7 @@ void APInt::fromString(unsigned numbits, StringRef str, uint8_t radix) {
   // If its negative, put it in two's complement form
   if (isNeg) {
     (*this)--;
-    this->flipAllBits();
+    this->flip();
   }
 }
 
@@ -2201,7 +2149,7 @@ void APInt::toString(SmallVectorImpl<char> &Str, unsigned Radix,
     // They want to print the signed version and it is a negative value
     // Flip the bits and add one to turn it into the equivalent positive
     // value and put a '-' in the result.
-    Tmp.flipAllBits();
+    Tmp.flip();
     Tmp++;
     Str.push_back('-');
   }

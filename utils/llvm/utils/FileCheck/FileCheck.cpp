@@ -22,7 +22,7 @@
 #include "llvm/Support/Regex.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Signals.h"
+#include "llvm/System/Signals.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
 #include <algorithm>
@@ -50,10 +50,6 @@ NoCanonicalizeWhiteSpace("strict-whitespace",
 class Pattern {
   SMLoc PatternLoc;
 
-  /// MatchEOF - When set, this pattern only matches the end of file. This is
-  /// used for trailing CHECK-NOTs.
-  bool MatchEOF;
-
   /// FixedStr - If non-empty, this pattern is a fixed string match with the
   /// specified fixed string.
   StringRef FixedStr;
@@ -75,7 +71,7 @@ class Pattern {
 
 public:
 
-  Pattern(bool matchEOF = false) : MatchEOF(matchEOF) { }
+  Pattern() { }
 
   bool ParsePattern(StringRef PatternStr, SourceMgr &SM);
 
@@ -275,12 +271,6 @@ bool Pattern::AddRegExToRegEx(StringRef RegexStr, unsigned &CurParen,
 /// there is a match, the size of the matched string is returned in MatchLen.
 size_t Pattern::Match(StringRef Buffer, size_t &MatchLen,
                       StringMap<StringRef> &VariableTable) const {
-  // If this is the EOF pattern, match it immediately.
-  if (MatchEOF) {
-    MatchLen = 0;
-    return Buffer.size();
-  }
-
   // If this is a fixed string pattern, just match it now.
   if (!FixedStr.empty()) {
     MatchLen = FixedStr.size();
@@ -456,11 +446,6 @@ static MemoryBuffer *CanonicalizeInputFile(MemoryBuffer *MB) {
 
   for (const char *Ptr = MB->getBufferStart(), *End = MB->getBufferEnd();
        Ptr != End; ++Ptr) {
-    // Eliminate trailing dosish \r.
-    if (Ptr <= End - 2 && Ptr[0] == '\r' && Ptr[1] == '\n') {
-      continue;
-    }
-
     // If C is not a horizontal whitespace, skip it.
     if (*Ptr != ' ' && *Ptr != '\t') {
       NewFile.push_back(*Ptr);
@@ -580,17 +565,15 @@ static bool ReadCheckFile(SourceMgr &SM,
     std::swap(NotMatches, CheckStrings.back().NotStrings);
   }
 
-  // Add an EOF pattern for any trailing CHECK-NOTs.
-  if (!NotMatches.empty()) {
-    CheckStrings.push_back(CheckString(Pattern(true),
-                                       SMLoc::getFromPointer(Buffer.data()),
-                                       false));
-    std::swap(NotMatches, CheckStrings.back().NotStrings);
-  }
-
   if (CheckStrings.empty()) {
     errs() << "error: no check strings found with prefix '" << CheckPrefix
            << ":'\n";
+    return true;
+  }
+
+  if (!NotMatches.empty()) {
+    errs() << "error: '" << CheckPrefix
+           << "-NOT:' not supported after last check line.\n";
     return true;
   }
 
@@ -679,11 +662,10 @@ int main(int argc, char **argv) {
 
     // Find StrNo in the file.
     size_t MatchLen = 0;
-    size_t MatchPos = CheckStr.Pat.Match(Buffer, MatchLen, VariableTable);
-    Buffer = Buffer.substr(MatchPos);
+    Buffer = Buffer.substr(CheckStr.Pat.Match(Buffer, MatchLen, VariableTable));
 
     // If we didn't find a match, reject the input.
-    if (MatchPos == StringRef::npos) {
+    if (Buffer.empty()) {
       PrintCheckFailed(SM, CheckStr, SearchFrom, VariableTable);
       return 1;
     }

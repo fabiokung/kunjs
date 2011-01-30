@@ -19,51 +19,12 @@
 #include "llvm/Target/TargetFrameInfo.h"
 
 namespace llvm {
-  class ARMSubtarget;
 
 class ARMFrameInfo : public TargetFrameInfo {
-protected:
-  const ARMSubtarget &STI;
-
 public:
-  explicit ARMFrameInfo(const ARMSubtarget &sti)
-    : TargetFrameInfo(StackGrowsDown, sti.getStackAlignment(), 0, 4), STI(sti) {
+  explicit ARMFrameInfo(const ARMSubtarget &ST)
+    : TargetFrameInfo(StackGrowsDown, ST.getStackAlignment(), 0, 4) {
   }
-
-  /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
-  /// the function.
-  void emitPrologue(MachineFunction &MF) const;
-  void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
-
-  bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator MI,
-                                 const std::vector<CalleeSavedInfo> &CSI,
-                                 const TargetRegisterInfo *TRI) const;
-
-  bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
-                                   MachineBasicBlock::iterator MI,
-                                   const std::vector<CalleeSavedInfo> &CSI,
-                                   const TargetRegisterInfo *TRI) const;
-
-  bool hasFP(const MachineFunction &MF) const;
-  bool hasReservedCallFrame(const MachineFunction &MF) const;
-  bool canSimplifyCallFramePseudos(const MachineFunction &MF) const;
-  int getFrameIndexReference(const MachineFunction &MF, int FI,
-                             unsigned &FrameReg) const;
-  int ResolveFrameIndexReference(const MachineFunction &MF, int FI,
-                                 unsigned &FrameReg, int SPAdj) const;
-  int getFrameIndexOffset(const MachineFunction &MF, int FI) const;
-
-  void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
-                                            RegScavenger *RS) const;
-
- private:
-  void emitPopInst(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-                   const std::vector<CalleeSavedInfo> &CSI, unsigned Opc,
-                   bool isVarArg, bool(*Func)(unsigned, bool)) const;
-  void emitPushInst(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-                    const std::vector<CalleeSavedInfo> &CSI, unsigned Opc,
-                    bool(*Func)(unsigned, bool)) const;
 };
 
 } // End llvm namespace

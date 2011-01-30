@@ -48,10 +48,7 @@ namespace {
   public:
     static char ID;
     RAFast() : MachineFunctionPass(ID), StackSlotForVirtReg(-1),
-               isBulkSpilling(false) {
-      initializePHIEliminationPass(*PassRegistry::getPassRegistry());
-      initializeTwoAddressInstructionPassPass(*PassRegistry::getPassRegistry());
-    }
+               isBulkSpilling(false) {}
   private:
     const TargetMachine *TM;
     MachineFunction *MF;
@@ -801,11 +798,9 @@ void RAFast::AllocateBasicBlock() {
             setPhysReg(MI, i, LRI->second.PhysReg);
           else {
             int SS = StackSlotForVirtReg[Reg];
-            if (SS == -1) {
+            if (SS == -1)
               // We can't allocate a physreg for a DebugValue, sorry!
-              DEBUG(dbgs() << "Unable to allocate vreg used by DBG_VALUE");
               MO.setReg(0);
-            }
             else {
               // Modify DBG_VALUE now that the value is in a spill slot.
               int64_t Offset = MI->getOperand(1).getImm();
@@ -822,11 +817,9 @@ void RAFast::AllocateBasicBlock() {
                 MI = NewDV;
                 ScanDbgValue = true;
                 break;
-              } else {
+              } else
                 // We can't allocate a physreg for a DebugValue; sorry!
-                DEBUG(dbgs() << "Unable to allocate vreg used by DBG_VALUE");
                 MO.setReg(0);
-              }
             }
           }
         }

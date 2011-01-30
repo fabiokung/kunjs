@@ -171,6 +171,9 @@ class SelectionDAG {
   /// DbgInfo - Tracks dbg_value information through SDISel.
   SDDbgInfo *DbgInfo;
 
+  /// VerifyNode - Sanity check the given node.  Aborts if it is invalid.
+  void VerifyNode(SDNode *N);
+
   /// setGraphColorHelper - Implementation of setSubgraphColor.
   /// Return whether we had to truncate the search.
   ///
@@ -539,17 +542,17 @@ public:
 
   SDValue getMemcpy(SDValue Chain, DebugLoc dl, SDValue Dst, SDValue Src,
                     SDValue Size, unsigned Align, bool isVol, bool AlwaysInline,
-                    MachinePointerInfo DstPtrInfo,
-                    MachinePointerInfo SrcPtrInfo);
+                    const Value *DstSV, uint64_t DstSVOff,
+                    const Value *SrcSV, uint64_t SrcSVOff);
 
   SDValue getMemmove(SDValue Chain, DebugLoc dl, SDValue Dst, SDValue Src,
                      SDValue Size, unsigned Align, bool isVol,
-                     MachinePointerInfo DstPtrInfo,
-                     MachinePointerInfo SrcPtrInfo);
+                     const Value *DstSV, uint64_t DstOSVff,
+                     const Value *SrcSV, uint64_t SrcSVOff);
 
   SDValue getMemset(SDValue Chain, DebugLoc dl, SDValue Dst, SDValue Src,
                     SDValue Size, unsigned Align, bool isVol,
-                    MachinePointerInfo DstPtrInfo);
+                    const Value *DstSV, uint64_t DstSVOff);
 
   /// getSetCC - Helper function to make it easier to build SetCC's if you just
   /// have an ISD::CondCode instead of an SDValue.
@@ -584,8 +587,8 @@ public:
   /// getAtomic - Gets a node for an atomic op, produces result and chain and
   /// takes 3 operands
   SDValue getAtomic(unsigned Opcode, DebugLoc dl, EVT MemVT, SDValue Chain,
-                    SDValue Ptr, SDValue Cmp, SDValue Swp,
-                    MachinePointerInfo PtrInfo, unsigned Alignment=0);
+                    SDValue Ptr, SDValue Cmp, SDValue Swp, const Value* PtrVal,
+                    unsigned Alignment=0);
   SDValue getAtomic(unsigned Opcode, DebugLoc dl, EVT MemVT, SDValue Chain,
                     SDValue Ptr, SDValue Cmp, SDValue Swp,
                     MachineMemOperand *MMO);
@@ -606,13 +609,13 @@ public:
   SDValue getMemIntrinsicNode(unsigned Opcode, DebugLoc dl,
                               const EVT *VTs, unsigned NumVTs,
                               const SDValue *Ops, unsigned NumOps,
-                              EVT MemVT, MachinePointerInfo PtrInfo,
+                              EVT MemVT, const Value *srcValue, int SVOff,
                               unsigned Align = 0, bool Vol = false,
                               bool ReadMem = true, bool WriteMem = true);
 
   SDValue getMemIntrinsicNode(unsigned Opcode, DebugLoc dl, SDVTList VTList,
                               const SDValue *Ops, unsigned NumOps,
-                              EVT MemVT, MachinePointerInfo PtrInfo,
+                              EVT MemVT, const Value *srcValue, int SVOff,
                               unsigned Align = 0, bool Vol = false,
                               bool ReadMem = true, bool WriteMem = true);
 
@@ -627,22 +630,19 @@ public:
   /// determined by their operands, and they produce a value AND a token chain.
   ///
   SDValue getLoad(EVT VT, DebugLoc dl, SDValue Chain, SDValue Ptr,
-                  MachinePointerInfo PtrInfo, bool isVolatile,
-                  bool isNonTemporal, unsigned Alignment,
-                  const MDNode *TBAAInfo = 0);
+                  const Value *SV, int SVOffset, bool isVolatile,
+                  bool isNonTemporal, unsigned Alignment);
   SDValue getExtLoad(ISD::LoadExtType ExtType, EVT VT, DebugLoc dl,
-                     SDValue Chain, SDValue Ptr, MachinePointerInfo PtrInfo,
-                     EVT MemVT, bool isVolatile,
-                     bool isNonTemporal, unsigned Alignment,
-                     const MDNode *TBAAInfo = 0);
+                     SDValue Chain, SDValue Ptr, const Value *SV,
+                     int SVOffset, EVT MemVT, bool isVolatile,
+                     bool isNonTemporal, unsigned Alignment);
   SDValue getIndexedLoad(SDValue OrigLoad, DebugLoc dl, SDValue Base,
                          SDValue Offset, ISD::MemIndexedMode AM);
   SDValue getLoad(ISD::MemIndexedMode AM, ISD::LoadExtType ExtType,
                   EVT VT, DebugLoc dl,
                   SDValue Chain, SDValue Ptr, SDValue Offset,
-                  MachinePointerInfo PtrInfo, EVT MemVT,
-                  bool isVolatile, bool isNonTemporal, unsigned Alignment,
-                  const MDNode *TBAAInfo = 0);
+                  const Value *SV, int SVOffset, EVT MemVT,
+                  bool isVolatile, bool isNonTemporal, unsigned Alignment);
   SDValue getLoad(ISD::MemIndexedMode AM, ISD::LoadExtType ExtType,
                   EVT VT, DebugLoc dl,
                   SDValue Chain, SDValue Ptr, SDValue Offset,
@@ -651,16 +651,14 @@ public:
   /// getStore - Helper function to build ISD::STORE nodes.
   ///
   SDValue getStore(SDValue Chain, DebugLoc dl, SDValue Val, SDValue Ptr,
-                   MachinePointerInfo PtrInfo, bool isVolatile,
-                   bool isNonTemporal, unsigned Alignment,
-                   const MDNode *TBAAInfo = 0);
+                   const Value *SV, int SVOffset, bool isVolatile,
+                   bool isNonTemporal, unsigned Alignment);
   SDValue getStore(SDValue Chain, DebugLoc dl, SDValue Val, SDValue Ptr,
                    MachineMemOperand *MMO);
   SDValue getTruncStore(SDValue Chain, DebugLoc dl, SDValue Val, SDValue Ptr,
-                        MachinePointerInfo PtrInfo, EVT TVT,
+                        const Value *SV, int SVOffset, EVT TVT,
                         bool isNonTemporal, bool isVolatile,
-                        unsigned Alignment,
-                        const MDNode *TBAAInfo = 0);
+                        unsigned Alignment);
   SDValue getTruncStore(SDValue Chain, DebugLoc dl, SDValue Val, SDValue Ptr,
                         EVT TVT, MachineMemOperand *MMO);
   SDValue getIndexedStore(SDValue OrigStoe, DebugLoc dl, SDValue Base,

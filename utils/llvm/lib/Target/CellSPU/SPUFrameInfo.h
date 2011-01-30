@@ -12,39 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SPU_FRAMEINFO_H
-#define SPU_FRAMEINFO_H
+#if !defined(SPUFRAMEINFO_H)
 
-#include "SPURegisterInfo.h"
 #include "llvm/Target/TargetFrameInfo.h"
 #include "llvm/Target/TargetMachine.h"
+#include "SPURegisterInfo.h"
 
 namespace llvm {
-  class SPUSubtarget;
-
   class SPUFrameInfo: public TargetFrameInfo {
-    const SPUSubtarget &Subtarget;
+    const TargetMachine &TM;
     std::pair<unsigned, int> LR[1];
 
   public:
-    SPUFrameInfo(const SPUSubtarget &sti);
-
-    //! Determine the frame's layour
-    void determineFrameLayout(MachineFunction &MF) const;
-
-    /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
-    /// the function.
-    void emitPrologue(MachineFunction &MF) const;
-    void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
-
-    //! Prediate: Target has dedicated frame pointer
-    bool hasFP(const MachineFunction &MF) const;
-
-    void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
-                                              RegScavenger *RS = NULL) const;
-
-    //! Perform target-specific stack frame setup.
-    void getInitialFrameState(std::vector<MachineMove> &Moves) const;
+    SPUFrameInfo(const TargetMachine &tm);
 
     //! Return a function's saved spill slots
     /*!
@@ -91,4 +71,5 @@ namespace llvm {
   };
 }
 
+#define SPUFRAMEINFO_H 1
 #endif

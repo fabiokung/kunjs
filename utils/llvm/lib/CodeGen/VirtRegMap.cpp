@@ -48,7 +48,7 @@ STATISTIC(NumSpills  , "Number of register spills");
 
 char VirtRegMap::ID = 0;
 
-INITIALIZE_PASS(VirtRegMap, "virtregmap", "Virtual Register Map", false, false)
+INITIALIZE_PASS(VirtRegMap, "virtregmap", "Virtual Register Map", false, false);
 
 bool VirtRegMap::runOnMachineFunction(MachineFunction &mf) {
   MRI = &mf.getRegInfo();
@@ -99,20 +99,6 @@ void VirtRegMap::grow() {
   ImplicitDefed.resize(LastVirtReg-TargetRegisterInfo::FirstVirtualRegister+1);
 }
 
-unsigned VirtRegMap::createSpillSlot(const TargetRegisterClass *RC) {
-  int SS = MF->getFrameInfo()->CreateSpillStackObject(RC->getSize(),
-                                                      RC->getAlignment());
-  if (LowSpillSlot == NO_STACK_SLOT)
-    LowSpillSlot = SS;
-  if (HighSpillSlot == NO_STACK_SLOT || SS > HighSpillSlot)
-    HighSpillSlot = SS;
-  assert(SS >= LowSpillSlot && "Unexpected low spill slot");
-  unsigned Idx = SS-LowSpillSlot;
-  while (Idx >= SpillSlotToUsesMap.size())
-    SpillSlotToUsesMap.resize(SpillSlotToUsesMap.size()*2);
-  return SS;
-}
-
 unsigned VirtRegMap::getRegAllocPref(unsigned virtReg) {
   std::pair<unsigned, unsigned> Hint = MRI->getRegAllocationHint(virtReg);
   unsigned physReg = Hint.second;
@@ -130,8 +116,18 @@ int VirtRegMap::assignVirt2StackSlot(unsigned virtReg) {
   assert(Virt2StackSlotMap[virtReg] == NO_STACK_SLOT &&
          "attempt to assign stack slot to already spilled register");
   const TargetRegisterClass* RC = MF->getRegInfo().getRegClass(virtReg);
+  int SS = MF->getFrameInfo()->CreateSpillStackObject(RC->getSize(),
+                                                 RC->getAlignment());
+  if (LowSpillSlot == NO_STACK_SLOT)
+    LowSpillSlot = SS;
+  if (HighSpillSlot == NO_STACK_SLOT || SS > HighSpillSlot)
+    HighSpillSlot = SS;
+  unsigned Idx = SS-LowSpillSlot;
+  while (Idx >= SpillSlotToUsesMap.size())
+    SpillSlotToUsesMap.resize(SpillSlotToUsesMap.size()*2);
+  Virt2StackSlotMap[virtReg] = SS;
   ++NumSpills;
-  return Virt2StackSlotMap[virtReg] = createSpillSlot(RC);
+  return SS;
 }
 
 void VirtRegMap::assignVirt2StackSlot(unsigned virtReg, int SS) {
@@ -164,7 +160,14 @@ int VirtRegMap::getEmergencySpillSlot(const TargetRegisterClass *RC) {
     EmergencySpillSlots.find(RC);
   if (I != EmergencySpillSlots.end())
     return I->second;
-  return EmergencySpillSlots[RC] = createSpillSlot(RC);
+  int SS = MF->getFrameInfo()->CreateSpillStackObject(RC->getSize(),
+                                                 RC->getAlignment());
+  if (LowSpillSlot == NO_STACK_SLOT)
+    LowSpillSlot = SS;
+  if (HighSpillSlot == NO_STACK_SLOT || SS > HighSpillSlot)
+    HighSpillSlot = SS;
+  EmergencySpillSlots[RC] = SS;
+  return SS;
 }
 
 void VirtRegMap::addSpillSlotUse(int FI, MachineInstr *MI) {

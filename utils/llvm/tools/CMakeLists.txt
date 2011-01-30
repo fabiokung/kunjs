@@ -2,14 +2,6 @@
 # large and three small executables. This is done to minimize memory load
 # in parallel builds.  Please retain this ordering.
 
-# If polly exists and is not disabled compile it and add it to the LLVM tools.
-option(LLVM_BUILD_POLLY "Compile polly" ON)
-if( EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/polly/CMakeLists.txt )
-  if (LLVM_BUILD_POLLY)
-    add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/polly)
-  endif (LLVM_BUILD_POLLY)
-endif( EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/polly/CMakeLists.txt )
-
 if( NOT WIN32 OR MSYS OR CYGWIN )
   # It is useful to build llvm-config before the other tools, so we
   # have a fresh LibDeps.txt for regenerating the hard-coded library
@@ -36,7 +28,6 @@ add_subdirectory(lli)
 
 add_subdirectory(llvm-extract)
 add_subdirectory(llvm-diff)
-add_subdirectory(macho-dump)
 
 add_subdirectory(bugpoint)
 add_subdirectory(bugpoint-passes)

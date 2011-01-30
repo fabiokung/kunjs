@@ -9,7 +9,7 @@ kIsWindows = platform.system() == 'Windows'
 
 class GoogleTest(object):
     def __init__(self, test_sub_dir, test_suffix):
-        self.test_sub_dir = os.path.normcase(str(test_sub_dir)).split(';')
+        self.test_sub_dir = str(test_sub_dir)
         self.test_suffix = str(test_suffix)
 
         # On Windows, assume tests will also end in '.exe'.
@@ -28,10 +28,7 @@ class GoogleTest(object):
 
         try:
             lines = Util.capture([path, '--gtest_list_tests'],
-                                 env=localConfig.environment)
-            if kIsWindows:
-              lines = lines.replace('\r', '')
-            lines = lines.split('\n')
+                                 env=localConfig.environment).split('\n')
         except:
             litConfig.error("unable to discover google-tests in %r" % path)
             raise StopIteration
@@ -47,7 +44,7 @@ class GoogleTest(object):
                 index += 1
             while len(nested_tests) > index:
                 nested_tests.pop()
-
+            
             ln = ln[index*2:]
             if ln.endswith('.'):
                 nested_tests.append(ln)
@@ -59,13 +56,10 @@ class GoogleTest(object):
         source_path = testSuite.getSourcePath(path_in_suite)
         for filename in os.listdir(source_path):
             # Check for the one subdirectory (build directory) tests will be in.
-            if not os.path.normcase(filename) in self.test_sub_dir:
+            if filename != self.test_sub_dir:
                 continue
 
             filepath = os.path.join(source_path, filename)
-            if not os.path.isdir(filepath):
-                continue
-
             for subfilename in os.listdir(filepath):
                 if subfilename.endswith(self.test_suffix):
                     execpath = os.path.join(filepath, subfilename)
@@ -90,7 +84,7 @@ class GoogleTest(object):
 
         out, err, exitCode = TestRunner.executeCommand(
             cmd, env=test.config.environment)
-
+            
         if not exitCode:
             return Test.PASS,''
 

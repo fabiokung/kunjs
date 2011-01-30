@@ -32,6 +32,7 @@
 #include "llvm/DerivedTypes.h"
 #include "llvm/Function.h"
 #include "llvm/Instructions.h"
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InlineCost.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -92,9 +93,7 @@ namespace {
     explicit LoopUnswitch(bool Os = false) : 
       LoopPass(ID), OptimizeForSize(Os), redoLoop(false), 
       currentLoop(NULL), DT(NULL), loopHeader(NULL),
-      loopPreheader(NULL) {
-        initializeLoopUnswitchPass(*PassRegistry::getPassRegistry());
-      }
+      loopPreheader(NULL) {}
 
     bool runOnLoop(Loop *L, LPPassManager &LPM);
     bool processCurrentLoop();
@@ -159,13 +158,7 @@ namespace {
   };
 }
 char LoopUnswitch::ID = 0;
-INITIALIZE_PASS_BEGIN(LoopUnswitch, "loop-unswitch", "Unswitch loops",
-                      false, false)
-INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(LCSSA)
-INITIALIZE_PASS_END(LoopUnswitch, "loop-unswitch", "Unswitch loops",
-                      false, false)
+INITIALIZE_PASS(LoopUnswitch, "loop-unswitch", "Unswitch loops", false, false);
 
 Pass *llvm::createLoopUnswitchPass(bool Os) { 
   return new LoopUnswitch(Os); 
@@ -461,10 +454,10 @@ bool LoopUnswitch::UnswitchIfProfitable(Value *LoopCond, Constant *Val) {
 // current values into those specified by VMap.
 //
 static inline void RemapInstruction(Instruction *I,
-                                    ValueToValueMapTy &VMap) {
+                                    ValueMap<const Value *, Value*> &VMap) {
   for (unsigned op = 0, E = I->getNumOperands(); op != E; ++op) {
     Value *Op = I->getOperand(op);
-    ValueToValueMapTy::iterator It = VMap.find(Op);
+    ValueMap<const Value *, Value*>::iterator It = VMap.find(Op);
     if (It != VMap.end()) Op = It->second;
     I->setOperand(op, Op);
   }
@@ -472,7 +465,7 @@ static inline void RemapInstruction(Instruction *I,
 
 /// CloneLoop - Recursively clone the specified loop and all of its children,
 /// mapping the blocks with the specified map.
-static Loop *CloneLoop(Loop *L, Loop *PL, ValueToValueMapTy &VM,
+static Loop *CloneLoop(Loop *L, Loop *PL, ValueMap<const Value*, Value*> &VM,
                        LoopInfo *LI, LPPassManager *LPM) {
   Loop *New = new Loop();
   LPM->insertLoop(New, PL);
@@ -616,7 +609,7 @@ void LoopUnswitch::UnswitchNontrivialCondition(Value *LIC, Constant *Val,
   // the loop preheader and exit blocks), keeping track of the mapping between
   // the instructions and blocks.
   NewBlocks.reserve(LoopBlocks.size());
-  ValueToValueMapTy VMap;
+  ValueMap<const Value*, Value*> VMap;
   for (unsigned i = 0, e = LoopBlocks.size(); i != e; ++i) {
     BasicBlock *NewBB = CloneBasicBlock(LoopBlocks[i], VMap, ".us", F);
     NewBlocks.push_back(NewBB);
@@ -654,7 +647,7 @@ void LoopUnswitch::UnswitchNontrivialCondition(Value *LIC, Constant *Val,
     for (BasicBlock::iterator I = ExitSucc->begin(); isa<PHINode>(I); ++I) {
       PN = cast<PHINode>(I);
       Value *V = PN->getIncomingValueForBlock(ExitBlocks[i]);
-      ValueToValueMapTy::iterator It = VMap.find(V);
+      ValueMap<const Value *, Value*>::iterator It = VMap.find(V);
       if (It != VMap.end()) V = It->second;
       PN->addIncoming(V, NewExit);
     }
@@ -968,7 +961,13 @@ void LoopUnswitch::SimplifyCode(std::vector<Instruction*> &Worklist, Loop *L) {
   while (!Worklist.empty()) {
     Instruction *I = Worklist.back();
     Worklist.pop_back();
-
+    
+    // Simple constant folding.
+    if (Constant *C = ConstantFoldInstruction(I)) {
+      ReplaceUsesOfWith(I, C, Worklist, L, LPM);
+      continue;
+    }
+    
     // Simple DCE.
     if (isInstructionTriviallyDead(I)) {
       DEBUG(dbgs() << "Remove dead instruction '" << *I);
@@ -983,16 +982,15 @@ void LoopUnswitch::SimplifyCode(std::vector<Instruction*> &Worklist, Loop *L) {
       ++NumSimplify;
       continue;
     }
-
+    
     // See if instruction simplification can hack this up.  This is common for
     // things like "select false, X, Y" after unswitching made the condition be
     // 'false'.
-    if (Value *V = SimplifyInstruction(I, 0, DT))
-      if (LI->replacementPreservesLCSSAForm(I, V)) {
-        ReplaceUsesOfWith(I, V, Worklist, L, LPM);
-        continue;
-      }
-
+    if (Value *V = SimplifyInstruction(I)) {
+      ReplaceUsesOfWith(I, V, Worklist, L, LPM);
+      continue;
+    }
+    
     // Special case hacks that appear commonly in unswitched code.
     if (BranchInst *BI = dyn_cast<BranchInst>(I)) {
       if (BI->isUnconditional()) {

@@ -45,7 +45,6 @@ unsigned char* JITDwarfEmitter::EmitDwarfTable(MachineFunction& F,
   TD = TM.getTargetData();
   stackGrowthDirection = TM.getFrameInfo()->getStackGrowthDirection();
   RI = TM.getRegisterInfo();
-  TFI = TM.getFrameInfo();
   JCE = &jce;
   
   unsigned char* ExceptionTable = EmitExceptionTable(&F, StartFunction,
@@ -524,7 +523,7 @@ JITDwarfEmitter::EmitCommonEHFrame(const Function* Personality) const {
   }
 
   std::vector<MachineMove> Moves;
-  TFI->getInitialFrameState(Moves);
+  RI->getInitialFrameState(Moves);
   EmitFrameMoves(0, Moves);
 
   JCE->emitAlignmentWithFill(PointerSize, dwarf::DW_CFA_nop);

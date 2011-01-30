@@ -28,13 +28,7 @@
 using namespace llvm;
 
 char IVUsers::ID = 0;
-INITIALIZE_PASS_BEGIN(IVUsers, "iv-users",
-                      "Induction Variable Users", false, true)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
-INITIALIZE_PASS_END(IVUsers, "iv-users",
-                      "Induction Variable Users", false, true)
+INITIALIZE_PASS(IVUsers, "iv-users", "Induction Variable Users", false, true);
 
 Pass *llvm::createIVUsersPass() {
   return new IVUsers();
@@ -149,8 +143,7 @@ IVStrideUse &IVUsers::AddUser(Instruction *User, Value *Operand) {
 }
 
 IVUsers::IVUsers()
-    : LoopPass(ID) {
-  initializeIVUsersPass(*PassRegistry::getPassRegistry());
+ : LoopPass(ID) {
 }
 
 void IVUsers::getAnalysisUsage(AnalysisUsage &AU) const {

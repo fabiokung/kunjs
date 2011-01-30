@@ -32,7 +32,8 @@ namespace llvm {
     enum SectionVariant {
       SV_COFF = 0,
       SV_ELF,
-      SV_MachO
+      SV_MachO,
+      SV_PIC16
     };
 
   private:
@@ -59,14 +60,6 @@ namespace llvm {
     virtual bool isBaseAddressKnownZero() const {
       return false;
     }
-
-    // UseCodeAlign - Return true if a .align directive should use
-    // "optimized nops" to fill instead of 0s.
-    virtual bool UseCodeAlign() const = 0;
-
-    /// isVirtualSection - Check whether this section is "virtual", that is
-    /// has no actual object file contents.
-    virtual bool isVirtualSection() const = 0;
 
     static bool classof(const MCSection *) { return true; }
   };

@@ -56,9 +56,9 @@ MBlazeTargetLowering::MBlazeTargetLowering(MBlazeTargetMachine &TM)
   setBooleanContents(ZeroOrOneBooleanContent);
 
   // Set up the register classes
-  addRegisterClass(MVT::i32, MBlaze::GPRRegisterClass);
+  addRegisterClass(MVT::i32, MBlaze::CPURegsRegisterClass);
   if (Subtarget->hasFPU()) {
-    addRegisterClass(MVT::f32, MBlaze::GPRRegisterClass);
+    addRegisterClass(MVT::f32, MBlaze::FGR32RegisterClass);
     setOperationAction(ISD::ConstantFP, MVT::f32, Legal);
   }
 
@@ -86,10 +86,6 @@ MBlazeTargetLowering::MBlazeTargetLowering(MBlazeTargetMachine &TM)
   setLoadExtAction(ISD::ZEXTLOAD, MVT::i1,  Promote);
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1,  Promote);
 
-  // Sign extended loads must be expanded
-  setLoadExtAction(ISD::SEXTLOAD, MVT::i8, Expand);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::i16, Expand);
-
   // MBlaze has no REM or DIVREM operations.
   setOperationAction(ISD::UREM,    MVT::i32, Expand);
   setOperationAction(ISD::SREM,    MVT::i32, Expand);
@@ -116,8 +112,8 @@ MBlazeTargetLowering::MBlazeTargetLowering(MBlazeTargetMachine &TM)
   }
 
   // Expand unsupported conversions
-  setOperationAction(ISD::BITCAST, MVT::f32, Expand);
-  setOperationAction(ISD::BITCAST, MVT::i32, Expand);
+  setOperationAction(ISD::BIT_CONVERT, MVT::f32, Expand);
+  setOperationAction(ISD::BIT_CONVERT, MVT::i32, Expand);
 
   // Expand SELECT_CC
   setOperationAction(ISD::SELECT_CC, MVT::Other, Expand);
@@ -257,12 +253,12 @@ MBlazeTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     loop->addSuccessor(finish);
     loop->addSuccessor(loop);
 
-    unsigned IAMT = R.createVirtualRegister(MBlaze::GPRRegisterClass);
+    unsigned IAMT = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
     BuildMI(BB, dl, TII->get(MBlaze::ANDI), IAMT)
       .addReg(MI->getOperand(2).getReg())
       .addImm(31);
 
-    unsigned IVAL = R.createVirtualRegister(MBlaze::GPRRegisterClass);
+    unsigned IVAL = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
     BuildMI(BB, dl, TII->get(MBlaze::ADDI), IVAL)
       .addReg(MI->getOperand(1).getReg())
       .addImm(0);
@@ -271,14 +267,14 @@ MBlazeTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
       .addReg(IAMT)
       .addMBB(finish);
 
-    unsigned DST = R.createVirtualRegister(MBlaze::GPRRegisterClass);
-    unsigned NDST = R.createVirtualRegister(MBlaze::GPRRegisterClass);
+    unsigned DST = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
+    unsigned NDST = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
     BuildMI(loop, dl, TII->get(MBlaze::PHI), DST)
       .addReg(IVAL).addMBB(BB)
       .addReg(NDST).addMBB(loop);
 
-    unsigned SAMT = R.createVirtualRegister(MBlaze::GPRRegisterClass);
-    unsigned NAMT = R.createVirtualRegister(MBlaze::GPRRegisterClass);
+    unsigned SAMT = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
+    unsigned NAMT = R.createVirtualRegister(MBlaze::CPURegsRegisterClass);
     BuildMI(loop, dl, TII->get(MBlaze::PHI), SAMT)
       .addReg(IAMT).addMBB(BB)
       .addReg(NAMT).addMBB(loop);
@@ -290,7 +286,7 @@ MBlazeTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
     else if (MI->getOpcode() == MBlaze::ShiftRL)
       BuildMI(loop, dl, TII->get(MBlaze::SRL), NDST).addReg(DST);
     else
-        llvm_unreachable("Cannot lower unknown shift instruction");
+        llvm_unreachable( "Cannot lower unknown shift instruction" );
 
     BuildMI(loop, dl, TII->get(MBlaze::ADDI), NAMT)
       .addReg(SAMT)
@@ -332,7 +328,7 @@ MBlazeTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
 
     unsigned Opc;
     switch (MI->getOperand(4).getImm()) {
-    default: llvm_unreachable("Unknown branch condition");
+    default: llvm_unreachable( "Unknown branch condition" );
     case MBlazeCC::EQ: Opc = MBlaze::BNEID; break;
     case MBlazeCC::NE: Opc = MBlaze::BEQID; break;
     case MBlazeCC::GT: Opc = MBlaze::BLEID; break;
@@ -396,9 +392,9 @@ SDValue MBlazeTargetLowering::LowerSELECT_CC(SDValue Op,
     CompareFlag = DAG.getNode(MBlazeISD::ICmp, dl, MVT::i32, LHS, RHS)
                     .getValue(1);
   } else {
-    llvm_unreachable("Cannot lower select_cc with unknown type");
+    llvm_unreachable( "Cannot lower select_cc with unknown type" );
   }
-
+ 
   return DAG.getNode(Opc, dl, TrueVal.getValueType(), TrueVal, FalseVal,
                      CompareFlag);
 }
@@ -425,12 +421,15 @@ LowerJumpTable(SDValue Op, SelectionDAG &DAG) const {
   SDValue HiPart;
   // FIXME there isn't actually debug info here
   DebugLoc dl = Op.getDebugLoc();
+  bool IsPIC = getTargetMachine().getRelocationModel() == Reloc::PIC_;
+  unsigned char OpFlag = IsPIC ? MBlazeII::MO_GOT : MBlazeII::MO_ABS_HILO;
 
   EVT PtrVT = Op.getValueType();
   JumpTableSDNode *JT  = cast<JumpTableSDNode>(Op);
 
-  SDValue JTI = DAG.getTargetJumpTable(JT->getIndex(), PtrVT, 0);
+  SDValue JTI = DAG.getTargetJumpTable(JT->getIndex(), PtrVT, OpFlag);
   return DAG.getNode(MBlazeISD::Wrap, dl, MVT::i32, JTI);
+  //return JTI;
 }
 
 SDValue MBlazeTargetLowering::
@@ -441,7 +440,7 @@ LowerConstantPool(SDValue Op, SelectionDAG &DAG) const {
   DebugLoc dl = Op.getDebugLoc();
 
   SDValue CP = DAG.getTargetConstantPool(C, MVT::i32, N->getAlignment(),
-                                         N->getOffset(), 0);
+                                         N->getOffset(), MBlazeII::MO_ABS_HILO);
   return DAG.getNode(MBlazeISD::Wrap, dl, MVT::i32, CP);
 }
 
@@ -457,8 +456,7 @@ SDValue MBlazeTargetLowering::LowerVASTART(SDValue Op,
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1),
-                      MachinePointerInfo(SV),
+  return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1), SV, 0,
                       false, false, 0);
 }
 
@@ -468,13 +466,18 @@ SDValue MBlazeTargetLowering::LowerVASTART(SDValue Op,
 
 #include "MBlazeGenCallingConv.inc"
 
-static bool CC_MBlaze2(unsigned ValNo, MVT ValVT,
-                       MVT LocVT, CCValAssign::LocInfo LocInfo,
+static bool CC_MBlaze2(unsigned ValNo, EVT ValVT,
+                       EVT LocVT, CCValAssign::LocInfo LocInfo,
                        ISD::ArgFlagsTy ArgFlags, CCState &State) {
   static const unsigned RegsSize=6;
   static const unsigned IntRegs[] = {
     MBlaze::R5, MBlaze::R6, MBlaze::R7,
     MBlaze::R8, MBlaze::R9, MBlaze::R10
+  };
+
+  static const unsigned FltRegs[] = {
+    MBlaze::F5, MBlaze::F6, MBlaze::F7,
+    MBlaze::F8, MBlaze::F9, MBlaze::F10
   };
 
   unsigned Reg=0;
@@ -494,7 +497,7 @@ static bool CC_MBlaze2(unsigned ValNo, MVT ValVT,
     Reg = State.AllocateReg(IntRegs, RegsSize);
     LocVT = MVT::i32;
   } else if (ValVT == MVT::f32) {
-    Reg = State.AllocateReg(IntRegs, RegsSize);
+    Reg = State.AllocateReg(FltRegs, RegsSize);
     LocVT = MVT::f32;
   }
 
@@ -553,7 +556,7 @@ LowerCall(SDValue Chain, SDValue Callee, CallingConv::ID CallConv,
   // Walk the register/memloc assignments, inserting copies/loads.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
-    MVT RegVT = VA.getLocVT();
+    EVT RegVT = VA.getLocVT();
     SDValue Arg = OutVals[i];
 
     // Promote the value if needed.
@@ -588,8 +591,7 @@ LowerCall(SDValue Chain, SDValue Callee, CallingConv::ID CallConv,
 
       // emit ISD::STORE whichs stores the
       // parameter value to a stack Location
-      MemOpChains.push_back(DAG.getStore(Chain, dl, Arg, PtrOff,
-                                         MachinePointerInfo(),
+      MemOpChains.push_back(DAG.getStore(Chain, dl, Arg, PtrOff, NULL, 0,
                                          false, false, 0));
     }
   }
@@ -614,12 +616,13 @@ LowerCall(SDValue Chain, SDValue Callee, CallingConv::ID CallConv,
   // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
   // node so that legalize doesn't hack it.
+  unsigned char OpFlag = MBlazeII::MO_NO_FLAG;
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), dl,
-                                getPointerTy(), 0, 0);
+                                getPointerTy(), 0, OpFlag);
   else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee))
     Callee = DAG.getTargetExternalSymbol(S->getSymbol(),
-                                getPointerTy(), 0);
+                                getPointerTy(), OpFlag);
 
   // MBlazeJmpLink = #chain, #target_address, #opt_in_flags...
   //             = Chain, Callee, Reg#1, Reg#2, ...
@@ -675,7 +678,7 @@ LowerCallResult(SDValue Chain, SDValue InFlag, CallingConv::ID CallConv,
                                RVLocs[i].getValVT(), InFlag).getValue(1);
     InFlag = Chain.getValue(2);
     InVals.push_back(Chain.getValue(0));
-  }
+  } 
 
   return Chain;
 }
@@ -720,14 +723,14 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
 
     // Arguments stored on registers
     if (VA.isRegLoc()) {
-      MVT RegVT = VA.getLocVT();
+      EVT RegVT = VA.getLocVT();
       ArgRegEnd = VA.getLocReg();
       TargetRegisterClass *RC = 0;
 
       if (RegVT == MVT::i32)
-        RC = MBlaze::GPRRegisterClass;
+        RC = MBlaze::CPURegsRegisterClass;
       else if (RegVT == MVT::f32)
-        RC = MBlaze::GPRRegisterClass;
+        RC = MBlaze::FGR32RegisterClass;
       else
         llvm_unreachable("RegVT not supported by LowerFormalArguments");
 
@@ -777,21 +780,20 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
 
       // Create load nodes to retrieve arguments from the stack
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy());
-      InVals.push_back(DAG.getLoad(VA.getValVT(), dl, Chain, FIN,
-                                   MachinePointerInfo::getFixedStack(FI),
+      InVals.push_back(DAG.getLoad(VA.getValVT(), dl, Chain, FIN, NULL, 0,
                                    false, false, 0));
     }
   }
 
   // To meet ABI, when VARARGS are passed on registers, the registers
   // must have their values written to the caller stack frame. If the last
-  // argument was placed in the stack, there's no need to save any register.
+  // argument was placed in the stack, there's no need to save any register. 
   if ((isVarArg) && ArgRegEnd) {
     if (StackPtr.getNode() == 0)
       StackPtr = DAG.getRegister(StackReg, getPointerTy());
 
     // The last register argument that must be saved is MBlaze::R10
-    TargetRegisterClass *RC = MBlaze::GPRRegisterClass;
+    TargetRegisterClass *RC = MBlaze::CPURegsRegisterClass;
 
     unsigned Begin = MBlazeRegisterInfo::getRegisterNumbering(MBlaze::R5);
     unsigned Start = MBlazeRegisterInfo::getRegisterNumbering(ArgRegEnd+1);
@@ -806,8 +808,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
       int FI = MFI->CreateFixedObject(4, 0, true);
       MBlazeFI->recordStoreVarArgsFI(FI, -(4+(StackLoc*4)));
       SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy());
-      OutChains.push_back(DAG.getStore(Chain, dl, ArgValue, PtrOff,
-                                       MachinePointerInfo(),
+      OutChains.push_back(DAG.getStore(Chain, dl, ArgValue, PtrOff, NULL, 0,
                                        false, false, 0));
 
       // Record the frame index of the first variable argument
@@ -817,7 +818,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
     }
   }
 
-  // All stores are grouped in one node to allow the matching between
+  // All stores are grouped in one node to allow the matching between 
   // the size of Ins and InVals. This only happens when on varg functions
   if (!OutChains.empty()) {
     OutChains.push_back(Chain);
@@ -908,37 +909,6 @@ getConstraintType(const std::string &Constraint) const
   return TargetLowering::getConstraintType(Constraint);
 }
 
-/// Examine constraint type and operand type and determine a weight value.
-/// This object must already have been set up with the operand type
-/// and the current alternative constraint selected.
-TargetLowering::ConstraintWeight
-MBlazeTargetLowering::getSingleConstraintMatchWeight(
-    AsmOperandInfo &info, const char *constraint) const {
-  ConstraintWeight weight = CW_Invalid;
-  Value *CallOperandVal = info.CallOperandVal;
-    // If we don't have a value, we can't do a match,
-    // but allow it at the lowest weight.
-  if (CallOperandVal == NULL)
-    return CW_Default;
-  const Type *type = CallOperandVal->getType();
-  // Look at the constraint type.
-  switch (*constraint) {
-  default:
-    weight = TargetLowering::getSingleConstraintMatchWeight(info, constraint);
-    break;
-  case 'd':
-  case 'y':
-    if (type->isIntegerTy())
-      weight = CW_Register;
-    break;
-  case 'f':
-    if (type->isFloatTy())
-      weight = CW_Register;
-    break;
-  }
-  return weight;
-}
-
 /// getRegClassForInlineAsmConstraint - Given a constraint letter (e.g. "r"),
 /// return a list of registers that can be used to satisfy the constraint.
 /// This should only be used for C_RegisterClass constraints.
@@ -947,10 +917,10 @@ getRegForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'r':
-      return std::make_pair(0U, MBlaze::GPRRegisterClass);
+      return std::make_pair(0U, MBlaze::CPURegsRegisterClass);
     case 'f':
       if (VT == MVT::f32)
-        return std::make_pair(0U, MBlaze::GPRRegisterClass);
+        return std::make_pair(0U, MBlaze::FGR32RegisterClass);
     }
   }
   return TargetLowering::getRegForInlineAsmConstraint(Constraint, VT);
@@ -970,7 +940,6 @@ getRegClassForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
     // GCC MBlaze Constraint Letters
     case 'd':
     case 'y':
-    case 'f':
       return make_vector<unsigned>(
         MBlaze::R3,  MBlaze::R4,  MBlaze::R5,  MBlaze::R6,
         MBlaze::R7,  MBlaze::R9,  MBlaze::R10, MBlaze::R11,
@@ -978,6 +947,15 @@ getRegClassForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
         MBlaze::R22, MBlaze::R23, MBlaze::R24, MBlaze::R25,
         MBlaze::R26, MBlaze::R27, MBlaze::R28, MBlaze::R29,
         MBlaze::R30, MBlaze::R31, 0);
+
+    case 'f':
+      return make_vector<unsigned>(
+        MBlaze::F3,  MBlaze::F4,  MBlaze::F5,  MBlaze::F6,
+        MBlaze::F7,  MBlaze::F9,  MBlaze::F10, MBlaze::F11,
+        MBlaze::F12, MBlaze::F19, MBlaze::F20, MBlaze::F21,
+        MBlaze::F22, MBlaze::F23, MBlaze::F24, MBlaze::F25,
+        MBlaze::F26, MBlaze::F27, MBlaze::F28, MBlaze::F29,
+        MBlaze::F30, MBlaze::F31, 0);
   }
   return std::vector<unsigned>();
 }

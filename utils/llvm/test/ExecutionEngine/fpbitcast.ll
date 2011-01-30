@@ -1,4 +1,5 @@
-; RUN: lli -force-interpreter=true %s | grep 40091eb8
+; RUN: llvm-as < %s > %t.bc
+; RUN: lli -force-interpreter=true %t.bc | grep 40091eb8
 ;
 define i32 @test(double %x) {
 entry:

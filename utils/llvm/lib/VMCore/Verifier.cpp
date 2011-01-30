@@ -72,9 +72,7 @@ namespace {  // Anonymous namespace for class
   struct PreVerifier : public FunctionPass {
     static char ID; // Pass ID, replacement for typeid
 
-    PreVerifier() : FunctionPass(ID) {
-      initializePreVerifierPass(*PassRegistry::getPassRegistry());
-    }
+    PreVerifier() : FunctionPass(ID) { }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       AU.setPreservesAll();
@@ -105,8 +103,8 @@ namespace {  // Anonymous namespace for class
 
 char PreVerifier::ID = 0;
 INITIALIZE_PASS(PreVerifier, "preverify", "Preliminary module verification", 
-                false, false)
-static char &PreVerifyID = PreVerifier::ID;
+                false, false);
+char &PreVerifyID = PreVerifier::ID;
 
 namespace {
   class TypeSet : public AbstractTypeUser {
@@ -186,15 +184,11 @@ namespace {
     Verifier()
       : FunctionPass(ID), 
       Broken(false), RealPass(true), action(AbortProcessAction),
-      Mod(0), Context(0), DT(0), MessagesStr(Messages) {
-        initializeVerifierPass(*PassRegistry::getPassRegistry());
-      }
+      Mod(0), Context(0), DT(0), MessagesStr(Messages) {}
     explicit Verifier(VerifierFailureAction ctn)
       : FunctionPass(ID), 
       Broken(false), RealPass(true), action(ctn), Mod(0), Context(0), DT(0),
-      MessagesStr(Messages) {
-        initializeVerifierPass(*PassRegistry::getPassRegistry());
-      }
+      MessagesStr(Messages) {}
 
     bool doInitialization(Module &M) {
       Mod = &M;
@@ -399,10 +393,7 @@ namespace {
 } // End anonymous namespace
 
 char Verifier::ID = 0;
-INITIALIZE_PASS_BEGIN(Verifier, "verify", "Module Verifier", false, false)
-INITIALIZE_PASS_DEPENDENCY(PreVerifier)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_END(Verifier, "verify", "Module Verifier", false, false)
+INITIALIZE_PASS(Verifier, "verify", "Module Verifier", false, false);
 
 // Assert - We know that cond should be true, if not print an error message.
 #define Assert(C, M) \
@@ -694,8 +685,6 @@ void Verifier::visitFunction(Function &F) {
   case CallingConv::Cold:
   case CallingConv::X86_FastCall:
   case CallingConv::X86_ThisCall:
-  case CallingConv::PTX_Kernel:
-  case CallingConv::PTX_Device:
     Assert1(!F.isVarArg(),
             "Varargs functions must have C calling conventions!", &F);
     break;
@@ -1654,14 +1643,10 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
     if (ID == Intrinsic::gcroot) {
       AllocaInst *AI =
         dyn_cast<AllocaInst>(CI.getArgOperand(0)->stripPointerCasts());
-      Assert1(AI, "llvm.gcroot parameter #1 must be an alloca.", &CI);
+      Assert1(AI && AI->getType()->getElementType()->isPointerTy(),
+              "llvm.gcroot parameter #1 must be a pointer alloca.", &CI);
       Assert1(isa<Constant>(CI.getArgOperand(1)),
               "llvm.gcroot parameter #2 must be a constant.", &CI);
-      if (!AI->getType()->getElementType()->isPointerTy()) {
-        Assert1(!isa<ConstantPointerNull>(CI.getArgOperand(1)),
-                "llvm.gcroot parameter #1 must either be a pointer alloca, "
-                "or argument #2 must be a non-null constant.", &CI);
-      }
     }
 
     Assert1(CI.getParent()->getParent()->hasGC(),

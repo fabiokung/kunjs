@@ -26,13 +26,11 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
-#include <map>
-#include <set>
 using namespace llvm;
 
 char LazyValueInfo::ID = 0;
 INITIALIZE_PASS(LazyValueInfo, "lazy-value-info",
-                "Lazy Value Information Analysis", false, true)
+                "Lazy Value Information Analysis", false, true);
 
 namespace llvm {
   FunctionPass *createLazyValueInfoPass() { return new LazyValueInfo(); }
@@ -201,7 +199,6 @@ public:
           return markOverdefined();
         return markNotConstant(RHS.getNotConstant());
       } else if (isConstantRange()) {
-         // FIXME: This could be made more precise.
         return markOverdefined();
       }
       
@@ -224,12 +221,9 @@ public:
       return markConstantRange(RHS.getConstantRange());
     }
     
-    // RHS must be a constant, we must be constantrange, 
-    // undef, constant, or notconstant.
-    if (isConstantRange()) {
-      // FIXME: This could be made more precise.
-      return markOverdefined();
-    }
+    // RHS must be a constant, we must be undef, constant, or notconstant.
+    assert(!isConstantRange() &&
+           "Constant and ConstantRange cannot be merged.");
     
     if (isUndefined())
       return markConstant(RHS.getConstant());
@@ -298,6 +292,10 @@ namespace {
       void deleted();
       void allUsesReplacedWith(Value* V) {
         deleted();
+      }
+
+      LVIValueHandle &operator=(Value *V) {
+        return *this = LVIValueHandle(V, Parent);
       }
     };
 
@@ -607,12 +605,6 @@ LVILatticeVal LVIQuery::getBlockValue(BasicBlock *BB) {
     break;
   case Instruction::BitCast:
     Result.markConstantRange(LHSRange);
-    break;
-  case Instruction::And:
-    Result.markConstantRange(LHSRange.binaryAnd(RHSRange));
-    break;
-  case Instruction::Or:
-    Result.markConstantRange(LHSRange.binaryOr(RHSRange));
     break;
   
   // Unhandled instructions are overdefined.

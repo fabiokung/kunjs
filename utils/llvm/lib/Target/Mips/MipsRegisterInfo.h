@@ -44,6 +44,8 @@ struct MipsRegisterInfo : public MipsGenRegisterInfo {
 
   BitVector getReservedRegs(const MachineFunction &MF) const;
 
+  bool hasFP(const MachineFunction &MF) const;
+
   void eliminateCallFramePseudoInstr(MachineFunction &MF,
                                      MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator I) const;
@@ -54,6 +56,9 @@ struct MipsRegisterInfo : public MipsGenRegisterInfo {
 
   void processFunctionBeforeFrameFinalized(MachineFunction &MF) const;
 
+  void emitPrologue(MachineFunction &MF) const;
+  void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
+  
   /// Debug information queries.
   unsigned getRARegister() const;
   unsigned getFrameRegister(const MachineFunction &MF) const;

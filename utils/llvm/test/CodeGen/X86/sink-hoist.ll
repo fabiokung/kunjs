@@ -6,11 +6,10 @@
 ; that it's conditionally evaluated.
 
 ; CHECK: foo:
-; CHECK-NEXT: testb $1, %dil
-; CHECK-NEXT: je
-; CHECK-NEXT: divsd
-; CHECK-NEXT: ret
 ; CHECK:      divsd
+; CHECK-NEXT: testb $1, %dil
+; CHECK-NEXT: jne
+; CHECK-NEXT: divsd
 
 define double @foo(double %x, double %y, i1 %c) nounwind {
   %a = fdiv double %x, 3.2
@@ -18,24 +17,6 @@ define double @foo(double %x, double %y, i1 %c) nounwind {
   %z = select i1 %c, double %a, double %b
   ret double %z
 }
-
-; Make sure the critical edge is broken so the divsd is sunken below
-; the conditional branch.
-; rdar://8454886
-
-; CHECK: split:
-; CHECK-NEXT: testb $1, %dil
-; CHECK-NEXT: je
-; CHECK-NEXT: divsd
-; CHECK-NEXT: ret
-; CHECK:      movaps
-; CHECK-NEXT: ret
-define double @split(double %x, double %y, i1 %c) nounwind {
-  %a = fdiv double %x, 3.2
-  %z = select i1 %c, double %a, double %y
-  ret double %z
-}
-
 
 ; Hoist floating-point constant-pool loads out of loops.
 
@@ -87,9 +68,9 @@ return:
 ; Codegen should hoist and CSE these constants.
 
 ; CHECK: vv:
-; CHECK: LCPI3_0(%rip), %xmm0
-; CHECK: LCPI3_1(%rip), %xmm1
-; CHECK: LCPI3_2(%rip), %xmm2
+; CHECK: LCPI2_0(%rip), %xmm0
+; CHECK: LCPI2_1(%rip), %xmm1
+; CHECK: LCPI2_2(%rip), %xmm2
 ; CHECK: align
 ; CHECK-NOT: LCPI
 ; CHECK: ret

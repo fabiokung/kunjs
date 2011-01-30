@@ -47,6 +47,8 @@ namespace llvm {
 
       PIC_ADD,      // Add with a PC operand and a PIC label.
 
+      AND,          // ARM "and" instruction that sets the 's' flag in CPSR.
+
       CMP,          // ARM compare instructions.
       CMPZ,         // ARM compare that sets only Z flag.
       CMPFP,        // ARM VFP compare instruction, sets FPSCR.
@@ -71,9 +73,8 @@ namespace llvm {
       VMOVRRD,      // double to two gprs.
       VMOVDRR,      // Two gprs to double.
 
-      EH_SJLJ_SETJMP,         // SjLj exception handling setjmp.
-      EH_SJLJ_LONGJMP,        // SjLj exception handling longjmp.
-      EH_SJLJ_DISPATCHSETUP,  // SjLj exception handling dispatch setup.
+      EH_SJLJ_SETJMP,    // SjLj exception handling setjmp.
+      EH_SJLJ_LONGJMP,   // SjLj exception handling longjmp.
 
       TC_RETURN,    // Tail call return pseudo.
 
@@ -81,20 +82,13 @@ namespace llvm {
 
       DYN_ALLOC,    // Dynamic allocation on the stack.
 
-      MEMBARRIER,   // Memory barrier (DMB)
-      MEMBARRIER_MCR, // Memory barrier (MCR)
-
-      PRELOAD,      // Preload
+      MEMBARRIER,   // Memory barrier
+      SYNCBARRIER,  // Memory sync barrier
       
       VCEQ,         // Vector compare equal.
-      VCEQZ,        // Vector compare equal to zero.
       VCGE,         // Vector compare greater than or equal.
-      VCGEZ,        // Vector compare greater than or equal to zero.
-      VCLEZ,        // Vector compare less than or equal to zero.
       VCGEU,        // Vector compare unsigned greater than or equal.
       VCGT,         // Vector compare greater than.
-      VCGTZ,        // Vector compare greater than zero.
-      VCLTZ,        // Vector compare less than zero.
       VCGTU,        // Vector compare unsigned greater than.
       VTST,         // Vector test bits.
 
@@ -167,17 +161,7 @@ namespace llvm {
       FMIN,
 
       // Bit-field insert
-      BFI,
-      
-      // Vector OR with immediate
-      VORRIMM,
-      // Vector AND with NOT of immediate
-      VBICIMM,
-
-      // Vector load N-element structure to all lanes:
-      VLD2DUP = ISD::FIRST_TARGET_MEMORY_OPCODE,
-      VLD3DUP,
-      VLD4DUP
+      BFI
     };
   }
 
@@ -258,12 +242,6 @@ namespace llvm {
 
 
     ConstraintType getConstraintType(const std::string &Constraint) const;
-
-    /// Examine constraint string and operand type and determine a weight value.
-    /// The operand object must already have been set up with the operand type.
-    ConstraintWeight getSingleConstraintMatchWeight(
-      AsmOperandInfo &info, const char *constraint) const;
-
     std::pair<unsigned, const TargetRegisterClass*>
       getRegForInlineAsmConstraint(const std::string &Constraint,
                                    EVT VT) const;
@@ -312,9 +290,6 @@ namespace llvm {
     /// materialize the FP immediate as a load from a constant pool.
     virtual bool isFPImmLegal(const APFloat &Imm, EVT VT) const;
 
-    virtual bool getTgtMemIntrinsic(IntrinsicInfo &Info,
-                                    const CallInst &I,
-                                    unsigned Intrinsic) const;
   protected:
     std::pair<const TargetRegisterClass*, uint8_t>
     findRepresentativeClass(EVT VT) const;
@@ -325,8 +300,6 @@ namespace llvm {
     const ARMSubtarget *Subtarget;
 
     const TargetRegisterInfo *RegInfo;
-
-    const InstrItineraryData *Itins;
 
     /// ARMPCLabelIndex - Keep track of the number of ARM PC labels created.
     ///
@@ -356,7 +329,6 @@ namespace llvm {
                              ISD::ArgFlagsTy Flags) const;
     SDValue LowerEH_SJLJ_SETJMP(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerEH_SJLJ_LONGJMP(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerEH_SJLJ_DISPATCHSETUP(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG,
                                     const ARMSubtarget *Subtarget) const;
     SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -421,8 +393,6 @@ namespace llvm {
                   const SmallVectorImpl<SDValue> &OutVals,
                   DebugLoc dl, SelectionDAG &DAG) const;
 
-    virtual bool isUsedByReturnOnly(SDNode *N) const;
-
     SDValue getARMCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC,
                       SDValue &ARMcc, SelectionDAG &DAG, DebugLoc dl) const;
     SDValue getVFPCmp(SDValue LHS, SDValue RHS,
@@ -439,13 +409,6 @@ namespace llvm {
                                         unsigned BinOpcode) const;
 
   };
-  
-  enum NEONModImmType {
-    VMOVModImm,
-    VMVNModImm,
-    OtherModImm
-  };
-  
   
   namespace ARM {
     FastISel *createFastISel(FunctionLoweringInfo &funcInfo);

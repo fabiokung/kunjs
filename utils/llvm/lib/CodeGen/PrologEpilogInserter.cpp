@@ -44,12 +44,8 @@ using namespace llvm;
 
 char PEI::ID = 0;
 
-INITIALIZE_PASS_BEGIN(PEI, "prologepilog",
-                "Prologue/Epilogue Insertion", false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-INITIALIZE_PASS_END(PEI, "prologepilog",
-                "Prologue/Epilogue Insertion", false, false)
+INITIALIZE_PASS(PEI, "prologepilog",
+                "Prologue/Epilogue Insertion", false, false);
 
 STATISTIC(NumVirtualFrameRegs, "Number of virtual frame regs encountered");
 STATISTIC(NumScavengedRegs, "Number of frame index regs scavenged");
@@ -65,8 +61,6 @@ FunctionPass *llvm::createPrologEpilogCodeInserter() { return new PEI(); }
 bool PEI::runOnMachineFunction(MachineFunction &Fn) {
   const Function* F = Fn.getFunction();
   const TargetRegisterInfo *TRI = Fn.getTarget().getRegisterInfo();
-  const TargetFrameInfo *TFI = Fn.getTarget().getFrameInfo();
-
   RS = TRI->requiresRegisterScavenging(Fn) ? new RegScavenger() : NULL;
   FrameIndexVirtualScavenging = TRI->requiresFrameIndexScavenging(Fn);
 
@@ -77,7 +71,7 @@ bool PEI::runOnMachineFunction(MachineFunction &Fn) {
 
   // Allow the target machine to make some adjustments to the function
   // e.g. UsedPhysRegs before calculateCalleeSavedRegisters.
-  TFI->processFunctionBeforeCalleeSavedScan(Fn, RS);
+  TRI->processFunctionBeforeCalleeSavedScan(Fn, RS);
 
   // Scan the function for modified callee saved registers and insert spill code
   // for any callee saved registers that are modified.
@@ -97,7 +91,7 @@ bool PEI::runOnMachineFunction(MachineFunction &Fn) {
 
   // Allow the target machine to make final modifications to the function
   // before the frame layout is finalized.
-  TFI->processFunctionBeforeFrameFinalized(Fn);
+  TRI->processFunctionBeforeFrameFinalized(Fn);
 
   // Calculate actual frame offsets for all abstract stack objects...
   calculateFrameObjectOffsets(Fn);
@@ -144,7 +138,6 @@ void PEI::getAnalysisUsage(AnalysisUsage &AU) const {
 /// pseudo instructions.
 void PEI::calculateCallsInformation(MachineFunction &Fn) {
   const TargetRegisterInfo *RegInfo = Fn.getTarget().getRegisterInfo();
-  const TargetFrameInfo *TFI = Fn.getTarget().getFrameInfo();
   MachineFrameInfo *MFI = Fn.getFrameInfo();
 
   unsigned MaxCallFrameSize = 0;
@@ -187,7 +180,7 @@ void PEI::calculateCallsInformation(MachineFunction &Fn) {
     // the target doesn't indicate otherwise, remove the call frame pseudos
     // here. The sub/add sp instruction pairs are still inserted, but we don't
     // need to track the SP adjustment for frame index elimination.
-    if (TFI->canSimplifyCallFramePseudos(Fn))
+    if (RegInfo->canSimplifyCallFramePseudos(Fn))
       RegInfo->eliminateCallFramePseudoInstr(Fn, *I->getParent(), I);
   }
 }
@@ -297,14 +290,13 @@ void PEI::insertCSRSpillsAndRestores(MachineFunction &Fn) {
     return;
 
   const TargetInstrInfo &TII = *Fn.getTarget().getInstrInfo();
-  const TargetFrameInfo *TFI = Fn.getTarget().getFrameInfo();
   const TargetRegisterInfo *TRI = Fn.getTarget().getRegisterInfo();
   MachineBasicBlock::iterator I;
 
   if (! ShrinkWrapThisFunction) {
     // Spill using target interface.
     I = EntryBlock->begin();
-    if (!TFI->spillCalleeSavedRegisters(*EntryBlock, I, CSI, TRI)) {
+    if (!TII.spillCalleeSavedRegisters(*EntryBlock, I, CSI, TRI)) {
       for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
         // Add the callee-saved register as live-in.
         // It's killed at the spill.
@@ -336,7 +328,7 @@ void PEI::insertCSRSpillsAndRestores(MachineFunction &Fn) {
 
       // Restore all registers immediately before the return and any
       // terminators that preceed it.
-      if (!TFI->restoreCalleeSavedRegisters(*MBB, I, CSI, TRI)) {
+      if (!TII.restoreCalleeSavedRegisters(*MBB, I, CSI, TRI)) {
         for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
           unsigned Reg = CSI[i].getReg();
           const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
@@ -557,7 +549,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
   // Make sure the special register scavenging spill slot is closest to the
   // frame pointer if a frame pointer is required.
   const TargetRegisterInfo *RegInfo = Fn.getTarget().getRegisterInfo();
-  if (RS && TFI.hasFP(Fn) && !RegInfo->needsStackRealignment(Fn)) {
+  if (RS && RegInfo->hasFP(Fn) && !RegInfo->needsStackRealignment(Fn)) {
     int SFI = RS->getScavengingFrameIndex();
     if (SFI >= 0)
       AdjustStackOffset(MFI, SFI, StackGrowsDown, Offset, MaxAlign);
@@ -639,17 +631,17 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
   // Make sure the special register scavenging spill slot is closest to the
   // stack pointer.
-  if (RS && (!TFI.hasFP(Fn) || RegInfo->needsStackRealignment(Fn))) {
+  if (RS && (!RegInfo->hasFP(Fn) || RegInfo->needsStackRealignment(Fn))) {
     int SFI = RS->getScavengingFrameIndex();
     if (SFI >= 0)
       AdjustStackOffset(MFI, SFI, StackGrowsDown, Offset, MaxAlign);
   }
 
-  if (!TFI.targetHandlesStackFrameRounding()) {
+  if (!RegInfo->targetHandlesStackFrameRounding()) {
     // If we have reserved argument space for call sites in the function
     // immediately on entry to the current function, count it as part of the
     // overall stack size.
-    if (MFI->adjustsStack() && TFI.hasReservedCallFrame(Fn))
+    if (MFI->adjustsStack() && RegInfo->hasReservedCallFrame(Fn))
       Offset += MFI->getMaxCallFrameSize();
 
     // Round up the size to a multiple of the alignment.  If the function has
@@ -680,16 +672,16 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 /// prolog and epilog code to the function.
 ///
 void PEI::insertPrologEpilogCode(MachineFunction &Fn) {
-  const TargetFrameInfo &TFI = *Fn.getTarget().getFrameInfo();
+  const TargetRegisterInfo *TRI = Fn.getTarget().getRegisterInfo();
 
   // Add prologue to the function...
-  TFI.emitPrologue(Fn);
+  TRI->emitPrologue(Fn);
 
   // Add epilogue to restore the callee-save registers in each exiting block
   for (MachineFunction::iterator I = Fn.begin(), E = Fn.end(); I != E; ++I) {
     // If last instruction is a return instruction, add an epilogue
     if (!I->empty() && I->back().getDesc().isReturn())
-      TFI.emitEpilogue(Fn, *I);
+      TRI->emitEpilogue(Fn, *I);
   }
 }
 
@@ -763,8 +755,8 @@ void PEI::replaceFrameIndices(MachineFunction &Fn) {
           // If this instruction has a FrameIndex operand, we need to
           // use that target machine register info object to eliminate
           // it.
-          TRI.eliminateFrameIndex(MI, SPAdj,
-                                  FrameIndexVirtualScavenging ?  NULL : RS);
+            TRI.eliminateFrameIndex(MI, SPAdj,
+                                    FrameIndexVirtualScavenging ?  NULL : RS);
 
           // Reset the iterator if we were at the beginning of the BB.
           if (AtBeginning) {
@@ -833,7 +825,7 @@ void PEI::scavengeFrameVirtualRegs(MachineFunction &Fn) {
             ScratchReg = RS->scavengeRegister(RC, I, SPAdj);
             ++NumScavengedRegs;
           }
-          // Replace this reference to the virtual register with the
+          // replace this reference to the virtual register with the
           // scratch register.
           assert (ScratchReg && "Missing scratch register!");
           MI->getOperand(i).setReg(ScratchReg);

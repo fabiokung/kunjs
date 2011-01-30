@@ -12,12 +12,10 @@ tablegen(BlackfinGenCallingConv.inc -gen-callingconv)
 tablegen(BlackfinGenIntrinsics.inc -gen-tgt-intrinsic)
 
 add_llvm_target(BlackfinCodeGen
-  BlackfinAsmPrinter.cpp
   BlackfinInstrInfo.cpp
   BlackfinIntrinsicInfo.cpp
   BlackfinISelDAGToDAG.cpp
   BlackfinISelLowering.cpp
-  BlackfinFrameInfo.cpp
   BlackfinMCAsmInfo.cpp
   BlackfinRegisterInfo.cpp
   BlackfinSubtarget.cpp

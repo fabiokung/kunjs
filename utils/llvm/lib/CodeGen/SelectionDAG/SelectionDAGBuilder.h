@@ -398,10 +398,6 @@ public:
   void LowerCallTo(ImmutableCallSite CS, SDValue Callee, bool IsTailCall,
                    MachineBasicBlock *LandingPad = NULL);
 
-  /// UpdateSplitBlock - When an MBB was split during scheduling, update the
-  /// references that ned to refer to the last resulting block.
-  void UpdateSplitBlock(MachineBasicBlock *First, MachineBasicBlock *Last);
-
 private:
   // Terminator instructions.
   void visitRet(const ReturnInst &I);

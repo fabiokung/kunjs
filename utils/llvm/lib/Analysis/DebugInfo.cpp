@@ -109,9 +109,7 @@ Function *DIDescriptor::getFunctionField(unsigned Elt) const {
 }
 
 unsigned DIVariable::getNumAddrElements() const {
-  if (getVersion() <= llvm::LLVMDebugVersion8)
-    return DbgNode->getNumOperands()-6;
-  return DbgNode->getNumOperands()-7;
+  return DbgNode->getNumOperands()-6;
 }
 
 
@@ -197,12 +195,6 @@ bool DIDescriptor::isGlobalVariable() const {
 /// isGlobal - Return true if the specified tag is legal for DIGlobal.
 bool DIDescriptor::isGlobal() const {
   return isGlobalVariable();
-}
-
-/// isUnspecifiedParmeter - Return true if the specified tab is
-/// DW_TAG_unspecified_parameters.
-bool DIDescriptor::isUnspecifiedParameter() const {
-  return DbgNode && getTag() == dwarf::DW_TAG_unspecified_parameters;
 }
 
 /// isScope - Return true if the specified tag is one of the scope
@@ -305,10 +297,9 @@ bool DIType::Verify() const {
     return false;
   if (!getContext().Verify())
     return false;
-  unsigned Tag = getTag();
-  if (!isBasicType() && Tag != dwarf::DW_TAG_const_type &&
-      Tag != dwarf::DW_TAG_volatile_type && Tag != dwarf::DW_TAG_pointer_type &&
-      Tag != dwarf::DW_TAG_restrict_type && getFilename().empty())
+
+  DICompileUnit CU = getCompileUnit();
+  if (!CU.Verify())
     return false;
   return true;
 }
@@ -710,13 +701,15 @@ Constant *DIFactory::GetTagConstant(unsigned TAG) {
 /// GetOrCreateArray - Create an descriptor for an array of descriptors.
 /// This implicitly uniques the arrays created.
 DIArray DIFactory::GetOrCreateArray(DIDescriptor *Tys, unsigned NumTys) {
-  if (NumTys == 0) {
-    Value *Null = llvm::Constant::getNullValue(Type::getInt32Ty(VMContext));
-    return DIArray(MDNode::get(VMContext, &Null, 1));
-  }
+  SmallVector<Value*, 16> Elts;
 
-  SmallVector<Value *, 16> Elts(Tys, Tys+NumTys);
-  return DIArray(MDNode::get(VMContext, Elts.data(), Elts.size()));
+  if (NumTys == 0)
+    Elts.push_back(llvm::Constant::getNullValue(Type::getInt32Ty(VMContext)));
+  else
+    for (unsigned i = 0; i != NumTys; ++i)
+      Elts.push_back(Tys[i]);
+
+  return DIArray(MDNode::get(VMContext,Elts.data(), Elts.size()));
 }
 
 /// GetOrCreateSubrange - Create a descriptor for a value range.  This
@@ -731,14 +724,7 @@ DISubrange DIFactory::GetOrCreateSubrange(int64_t Lo, int64_t Hi) {
   return DISubrange(MDNode::get(VMContext, &Elts[0], 3));
 }
 
-/// CreateUnspecifiedParameter - Create unspeicified type descriptor
-/// for the subroutine type.
-DIDescriptor DIFactory::CreateUnspecifiedParameter() {
-  Value *Elts[] = {
-    GetTagConstant(dwarf::DW_TAG_unspecified_parameters)
-  };
-  return DIDescriptor(MDNode::get(VMContext, &Elts[0], 1));
-}
+
 
 /// CreateCompileUnit - Create a new descriptor for the specified compile
 /// unit.  Note that this does not unique compile units within the module.
@@ -1025,7 +1011,7 @@ DISubprogram DIFactory::CreateSubprogram(DIDescriptor Context,
                                          bool isDefinition,
                                          unsigned VK, unsigned VIndex,
                                          DIType ContainingType,
-                                         unsigned Flags,
+                                         bool isArtificial,
                                          bool isOptimized,
                                          Function *Fn) {
 
@@ -1044,7 +1030,7 @@ DISubprogram DIFactory::CreateSubprogram(DIDescriptor Context,
     ConstantInt::get(Type::getInt32Ty(VMContext), (unsigned)VK),
     ConstantInt::get(Type::getInt32Ty(VMContext), VIndex),
     ContainingType,
-    ConstantInt::get(Type::getInt32Ty(VMContext), Flags),
+    ConstantInt::get(Type::getInt1Ty(VMContext), isArtificial),
     ConstantInt::get(Type::getInt1Ty(VMContext), isOptimized),
     Fn
   };
@@ -1078,7 +1064,7 @@ DISubprogram DIFactory::CreateSubprogramDefinition(DISubprogram &SPDeclaration){
     DeclNode->getOperand(11), // Virtuality
     DeclNode->getOperand(12), // VIndex
     DeclNode->getOperand(13), // Containting Type
-    DeclNode->getOperand(14), // Flags
+    DeclNode->getOperand(14), // isArtificial
     DeclNode->getOperand(15), // isOptimized
     SPDeclaration.getFunction()
   };
@@ -1156,47 +1142,12 @@ DIFactory::CreateGlobalVariable(DIDescriptor Context, StringRef Name,
   return DIGlobalVariable(Node);
 }
 
-/// fixupObjcLikeName - Replace contains special characters used
-/// in a typical Objective-C names with '.' in a given string.
-static void fixupObjcLikeName(std::string &Str) {
-  for (size_t i = 0, e = Str.size(); i < e; ++i) {
-    char C = Str[i];
-    if (C == '[' || C == ']' || C == ' ' || C == ':' || C == '+' ||
-        C == '(' || C == ')')
-      Str[i] = '.';
-  }
-}
-
-/// getOrInsertFnSpecificMDNode - Return a NameMDNode that is suitable
-/// to hold function specific information.
-NamedMDNode *llvm::getOrInsertFnSpecificMDNode(Module &M, StringRef FuncName) {
-  SmallString<32> Out;
-  if (FuncName.find('[') == StringRef::npos)
-    return M.getOrInsertNamedMetadata(Twine("llvm.dbg.lv.", FuncName)
-                                      .toStringRef(Out)); 
-  std::string Name = FuncName;
-  fixupObjcLikeName(Name);
-  return M.getOrInsertNamedMetadata(Twine("llvm.dbg.lv.", Name)
-                                    .toStringRef(Out));
-}
-
-/// getFnSpecificMDNode - Return a NameMDNode, if available, that is 
-/// suitable to hold function specific information.
-NamedMDNode *llvm::getFnSpecificMDNode(const Module &M, StringRef FuncName) {
-  if (FuncName.find('[') == StringRef::npos)
-    return M.getNamedMetadata(Twine("llvm.dbg.lv.", FuncName));
-  std::string Name = FuncName;
-  fixupObjcLikeName(Name);
-  return M.getNamedMetadata(Twine("llvm.dbg.lv.", Name));
-}
-
 /// CreateVariable - Create a new descriptor for the specified variable.
 DIVariable DIFactory::CreateVariable(unsigned Tag, DIDescriptor Context,
                                      StringRef Name,
                                      DIFile F,
                                      unsigned LineNo,
-                                     DIType Ty, bool AlwaysPreserve,
-                                     unsigned Flags) {
+                                     DIType Ty, bool AlwaysPreserve) {
   Value *Elts[] = {
     GetTagConstant(Tag),
     Context,
@@ -1204,9 +1155,8 @@ DIVariable DIFactory::CreateVariable(unsigned Tag, DIDescriptor Context,
     F,
     ConstantInt::get(Type::getInt32Ty(VMContext), LineNo),
     Ty,
-    ConstantInt::get(Type::getInt32Ty(VMContext), Flags)
   };
-  MDNode *Node = MDNode::get(VMContext, &Elts[0], 7);
+  MDNode *Node = MDNode::get(VMContext, &Elts[0], 6);
   if (AlwaysPreserve) {
     // The optimizer may remove local variable. If there is an interest
     // to preserve variable info in such situation then stash it in a
@@ -1219,8 +1169,9 @@ DIVariable DIFactory::CreateVariable(unsigned Tag, DIDescriptor Context,
     if (FName.startswith(StringRef(&One, 1)))
       FName = FName.substr(1);
 
-
-    NamedMDNode *FnLocals = getOrInsertFnSpecificMDNode(M, FName);
+    SmallString<32> Out;
+    NamedMDNode *FnLocals =
+      M.getOrInsertNamedMetadata(Twine("llvm.dbg.lv.", FName).toStringRef(Out));
     FnLocals->addOperand(Node);
   }
   return DIVariable(Node);
@@ -1230,20 +1181,21 @@ DIVariable DIFactory::CreateVariable(unsigned Tag, DIDescriptor Context,
 /// CreateComplexVariable - Create a new descriptor for the specified variable
 /// which has a complex address expression for its address.
 DIVariable DIFactory::CreateComplexVariable(unsigned Tag, DIDescriptor Context,
-                                            StringRef Name, DIFile F,
+                                            const std::string &Name,
+                                            DIFile F,
                                             unsigned LineNo,
-                                            DIType Ty, Value *const *Addr,
-                                            unsigned NumAddr) {
-  SmallVector<Value *, 15> Elts;
+                                            DIType Ty,
+                                            SmallVector<Value *, 9> &addr) {
+  SmallVector<Value *, 9> Elts;
   Elts.push_back(GetTagConstant(Tag));
   Elts.push_back(Context);
   Elts.push_back(MDString::get(VMContext, Name));
   Elts.push_back(F);
   Elts.push_back(ConstantInt::get(Type::getInt32Ty(VMContext), LineNo));
   Elts.push_back(Ty);
-  Elts.append(Addr, Addr+NumAddr);
+  Elts.insert(Elts.end(), addr.begin(), addr.end());
 
-  return DIVariable(MDNode::get(VMContext, Elts.data(), Elts.size()));
+  return DIVariable(MDNode::get(VMContext, &Elts[0], 6+addr.size()));
 }
 
 
@@ -1356,14 +1308,6 @@ Instruction *DIFactory::InsertDbgValueIntrinsic(Value *V, uint64_t Offset,
                     D };
   return CallInst::Create(ValueFn, Args, Args+3, "", InsertAtEnd);
 }
-
-// RecordType - Record DIType in a module such that it is not lost even if
-// it is not referenced through debug info anchors.
-void DIFactory::RecordType(DIType T) {
-  NamedMDNode *NMD = M.getOrInsertNamedMetadata("llvm.dbg.ty");
-  NMD->addOperand(T);
-}
-
 
 //===----------------------------------------------------------------------===//
 // DebugInfoFinder implementations.

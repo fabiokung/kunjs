@@ -23,16 +23,14 @@
 
 namespace llvm {
 
-class GlobalVariable;
 class TargetLowering;
-class SDNode;
-class SelectionDAG;
+class GlobalVariable;
 
 /// ComputeLinearIndex - Given an LLVM IR aggregate type and a sequence
 /// of insertvalue or extractvalue indices that identify a member, return
 /// the linearized index of the start of the member.
 ///
-unsigned ComputeLinearIndex(const Type *Ty,
+unsigned ComputeLinearIndex(const TargetLowering &TLI, const Type *Ty,
                             const unsigned *Indices,
                             const unsigned *IndicesEnd,
                             unsigned CurIndex = 0);
@@ -54,7 +52,7 @@ GlobalVariable *ExtractTypeInfo(Value *V);
 
 /// hasInlineAsmMemConstraint - Return true if the inline asm instruction being
 /// processed uses a memory 'm' constraint.
-bool hasInlineAsmMemConstraint(InlineAsm::ConstraintInfoVector &CInfos,
+bool hasInlineAsmMemConstraint(std::vector<InlineAsm::ConstraintInfo> &CInfos,
                                const TargetLowering &TLI);
 
 /// getFCmpCondCode - Return the ISD condition code corresponding to
@@ -75,9 +73,6 @@ ISD::CondCode getICmpCondCode(ICmpInst::Predicate Pred);
 ///
 /// This function only tests target-independent requirements.
 bool isInTailCallPosition(ImmutableCallSite CS, Attributes CalleeRetAttr,
-                          const TargetLowering &TLI);
-
-bool isInTailCallPosition(SelectionDAG &DAG, SDNode *Node,
                           const TargetLowering &TLI);
 
 } // End llvm namespace

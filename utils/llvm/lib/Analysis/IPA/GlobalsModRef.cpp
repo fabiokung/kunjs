@@ -88,9 +88,7 @@ namespace {
 
   public:
     static char ID;
-    GlobalsModRef() : ModulePass(ID) {
-      initializeGlobalsModRefPass(*PassRegistry::getPassRegistry());
-    }
+    GlobalsModRef() : ModulePass(ID) {}
 
     bool runOnModule(Module &M) {
       InitializeAliasAnalysis(this);                 // set up super class
@@ -108,9 +106,10 @@ namespace {
     //------------------------------------------------
     // Implement the AliasAnalysis API
     //
-    AliasResult alias(const Location &LocA, const Location &LocB);
+    AliasResult alias(const Value *V1, unsigned V1Size,
+                      const Value *V2, unsigned V2Size);
     ModRefResult getModRefInfo(ImmutableCallSite CS,
-                               const Location &Loc);
+                               const Value *P, unsigned Size);
     ModRefResult getModRefInfo(ImmutableCallSite CS1,
                                ImmutableCallSite CS2) {
       return AliasAnalysis::getModRefInfo(CS1, CS2);
@@ -120,33 +119,28 @@ namespace {
     /// called from the specified call site.  The call site may be null in which
     /// case the most generic behavior of this function should be returned.
     ModRefBehavior getModRefBehavior(const Function *F) {
-      ModRefBehavior Min = UnknownModRefBehavior;
-
       if (FunctionRecord *FR = getFunctionInfo(F)) {
         if (FR->FunctionEffect == 0)
-          Min = DoesNotAccessMemory;
+          return DoesNotAccessMemory;
         else if ((FR->FunctionEffect & Mod) == 0)
-          Min = OnlyReadsMemory;
+          return OnlyReadsMemory;
       }
-
-      return ModRefBehavior(AliasAnalysis::getModRefBehavior(F) & Min);
+      return AliasAnalysis::getModRefBehavior(F);
     }
     
     /// getModRefBehavior - Return the behavior of the specified function if
     /// called from the specified call site.  The call site may be null in which
     /// case the most generic behavior of this function should be returned.
     ModRefBehavior getModRefBehavior(ImmutableCallSite CS) {
-      ModRefBehavior Min = UnknownModRefBehavior;
-
-      if (const Function* F = CS.getCalledFunction())
-        if (FunctionRecord *FR = getFunctionInfo(F)) {
-          if (FR->FunctionEffect == 0)
-            Min = DoesNotAccessMemory;
-          else if ((FR->FunctionEffect & Mod) == 0)
-            Min = OnlyReadsMemory;
-        }
-
-      return ModRefBehavior(AliasAnalysis::getModRefBehavior(CS) & Min);
+      const Function* F = CS.getCalledFunction();
+      if (!F) return AliasAnalysis::getModRefBehavior(CS);
+      if (FunctionRecord *FR = getFunctionInfo(F)) {
+        if (FR->FunctionEffect == 0)
+          return DoesNotAccessMemory;
+        else if ((FR->FunctionEffect & Mod) == 0)
+          return OnlyReadsMemory;
+      }
+      return AliasAnalysis::getModRefBehavior(CS);
     }
 
     virtual void deleteValue(Value *V);
@@ -183,13 +177,9 @@ namespace {
 }
 
 char GlobalsModRef::ID = 0;
-INITIALIZE_AG_PASS_BEGIN(GlobalsModRef, AliasAnalysis,
+INITIALIZE_AG_PASS(GlobalsModRef, AliasAnalysis,
                 "globalsmodref-aa", "Simple mod/ref analysis for globals",    
-                false, true, false)
-INITIALIZE_AG_DEPENDENCY(CallGraph)
-INITIALIZE_AG_PASS_END(GlobalsModRef, AliasAnalysis,
-                "globalsmodref-aa", "Simple mod/ref analysis for globals",    
-                false, true, false)
+                false, true, false);
 
 Pass *llvm::createGlobalsModRefPass() { return new GlobalsModRef(); }
 
@@ -486,11 +476,11 @@ void GlobalsModRef::AnalyzeCallGraph(CallGraph &CG, Module &M) {
 /// other is some random pointer, we know there cannot be an alias, because the
 /// address of the global isn't taken.
 AliasAnalysis::AliasResult
-GlobalsModRef::alias(const Location &LocA,
-                     const Location &LocB) {
+GlobalsModRef::alias(const Value *V1, unsigned V1Size,
+                     const Value *V2, unsigned V2Size) {
   // Get the base object these pointers point to.
-  const Value *UV1 = LocA.Ptr->getUnderlyingObject();
-  const Value *UV2 = LocB.Ptr->getUnderlyingObject();
+  const Value *UV1 = V1->getUnderlyingObject();
+  const Value *UV2 = V2->getUnderlyingObject();
 
   // If either of the underlying values is a global, they may be non-addr-taken
   // globals, which we can answer queries about.
@@ -538,18 +528,17 @@ GlobalsModRef::alias(const Location &LocA,
   if ((GV1 || GV2) && GV1 != GV2)
     return NoAlias;
 
-  return AliasAnalysis::alias(LocA, LocB);
+  return AliasAnalysis::alias(V1, V1Size, V2, V2Size);
 }
 
 AliasAnalysis::ModRefResult
 GlobalsModRef::getModRefInfo(ImmutableCallSite CS,
-                             const Location &Loc) {
+                             const Value *P, unsigned Size) {
   unsigned Known = ModRef;
 
   // If we are asking for mod/ref info of a direct call with a pointer to a
   // global we are tracking, return information if we have it.
-  if (const GlobalValue *GV =
-        dyn_cast<GlobalValue>(Loc.Ptr->getUnderlyingObject()))
+  if (const GlobalValue *GV = dyn_cast<GlobalValue>(P->getUnderlyingObject()))
     if (GV->hasLocalLinkage())
       if (const Function *F = CS.getCalledFunction())
         if (NonAddressTakenGlobals.count(GV))
@@ -558,7 +547,7 @@ GlobalsModRef::getModRefInfo(ImmutableCallSite CS,
 
   if (Known == NoModRef)
     return NoModRef; // No need to query other mod/ref analyses
-  return ModRefResult(Known & AliasAnalysis::getModRefInfo(CS, Loc));
+  return ModRefResult(Known & AliasAnalysis::getModRefInfo(CS, P, Size));
 }
 
 

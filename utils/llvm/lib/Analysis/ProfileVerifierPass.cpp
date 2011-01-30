@@ -60,12 +60,10 @@ namespace llvm {
     static char ID; // Class identification, replacement for typeinfo
 
     explicit ProfileVerifierPassT () : FunctionPass(ID) {
-      initializeProfileVerifierPassPass(*PassRegistry::getPassRegistry());
       DisableAssertions = ProfileVerifierDisableAssertions;
     }
     explicit ProfileVerifierPassT (bool da) : FunctionPass(ID), 
                                               DisableAssertions(da) {
-      initializeProfileVerifierPassPass(*PassRegistry::getPassRegistry());
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -289,7 +287,7 @@ namespace llvm {
            i != ie; ++i) {
         if (const CallInst *CI = dyn_cast<CallInst>(&*i)) {
           FType *F = CI->getCalledFunction();
-          if (F && (F->getName() == "_setjmp")) {
+          if (F && (F->getNameStr() == "_setjmp")) {
             isSetJmpTarget = true; break;
           }
         }
@@ -368,11 +366,8 @@ namespace llvm {
   char ProfileVerifierPassT<FType, BType>::ID = 0;
 }
 
-INITIALIZE_PASS_BEGIN(ProfileVerifierPass, "profile-verifier",
-                "Verify profiling information", false, true)
-INITIALIZE_AG_DEPENDENCY(ProfileInfo)
-INITIALIZE_PASS_END(ProfileVerifierPass, "profile-verifier",
-                "Verify profiling information", false, true)
+INITIALIZE_PASS(ProfileVerifierPass, "profile-verifier",
+                "Verify profiling information", false, true);
 
 namespace llvm {
   FunctionPass *createProfileVerifierPass() {

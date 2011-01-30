@@ -25,7 +25,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/MutexGuard.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Mutex.h"
+#include "llvm/System/Mutex.h"
 #include <string>
 #include <vector>
 
@@ -35,7 +35,7 @@ namespace llvm {
 extern "C" {
 
   // Debuggers puts a breakpoint in this function.
-  LLVM_ATTRIBUTE_NOINLINE void __jit_debug_register_code() { }
+  DISABLE_INLINE void __jit_debug_register_code() { }
 
   // We put information about the JITed function in this global, which the
   // debugger reads.  Make sure to specify the version statically, because the

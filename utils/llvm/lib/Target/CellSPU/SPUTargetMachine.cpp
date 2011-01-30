@@ -40,7 +40,7 @@ SPUTargetMachine::SPUTargetMachine(const Target &T, const std::string &TT,
     Subtarget(TT, FS),
     DataLayout(Subtarget.getTargetDataString()),
     InstrInfo(*this),
-    FrameInfo(Subtarget),
+    FrameInfo(*this),
     TLInfo(*this),
     TSInfo(*this),
     InstrItins(Subtarget.getInstrItineraryData()) {

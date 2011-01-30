@@ -1,4 +1,5 @@
-; RUN: lli %s > /dev/null
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 define i32 @main() {
 	%int1 = add i32 0, 0		; <i32> [#uses=6]

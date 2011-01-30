@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Alpha.h"
+#include "AlphaJITInfo.h"
 #include "AlphaMCAsmInfo.h"
 #include "AlphaTargetMachine.h"
 #include "llvm/PassManager.h"
@@ -28,7 +29,8 @@ AlphaTargetMachine::AlphaTargetMachine(const Target &T, const std::string &TT,
                                        const std::string &FS)
   : LLVMTargetMachine(T, TT),
     DataLayout("e-f128:128:128-n64"),
-    FrameInfo(Subtarget),
+    FrameInfo(TargetFrameInfo::StackGrowsDown, 16, 0),
+    JITInfo(*this),
     Subtarget(TT, FS),
     TLInfo(*this),
     TSInfo(*this) {
@@ -50,5 +52,11 @@ bool AlphaTargetMachine::addPreEmitPass(PassManagerBase &PM,
   // Must run branch selection immediately preceding the asm printer
   PM.add(createAlphaBranchSelectionPass());
   PM.add(createAlphaLLRPPass(*this));
+  return false;
+}
+bool AlphaTargetMachine::addCodeEmitter(PassManagerBase &PM,
+                                        CodeGenOpt::Level OptLevel,
+                                        JITCodeEmitter &JCE) {
+  PM.add(createAlphaJITCodeEmitterPass(*this, JCE));
   return false;
 }

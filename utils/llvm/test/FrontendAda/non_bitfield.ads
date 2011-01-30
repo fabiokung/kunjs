@@ -1,4 +1,4 @@
--- RUN: %llvmgcc -S %s
+-- RUN: %llvmgcc -c %s
 package Non_Bitfield is
    type SP is access String;
    type E is (A, B, C);

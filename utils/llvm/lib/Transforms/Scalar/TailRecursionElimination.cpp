@@ -60,7 +60,6 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/Analysis/InlineCost.h"
-#include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CFG.h"
@@ -73,9 +72,7 @@ STATISTIC(NumAccumAdded, "Number of accumulators introduced");
 namespace {
   struct TailCallElim : public FunctionPass {
     static char ID; // Pass identification, replacement for typeid
-    TailCallElim() : FunctionPass(ID) {
-      initializeTailCallElimPass(*PassRegistry::getPassRegistry());
-    }
+    TailCallElim() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F);
 
@@ -91,7 +88,7 @@ namespace {
 
 char TailCallElim::ID = 0;
 INITIALIZE_PASS(TailCallElim, "tailcallelim",
-                "Tail Call Elimination", false, false)
+                "Tail Call Elimination", false, false);
 
 // Public interface to the TailCallElimination pass
 FunctionPass *llvm::createTailCallEliminationPass() {
@@ -178,7 +175,7 @@ bool TailCallElim::runOnFunction(Function &F) {
       PHINode *PN = ArgumentPHIs[i];
 
       // If the PHI Node is a dynamic constant, replace it with the value it is.
-      if (Value *PNV = SimplifyInstruction(PN)) {
+      if (Value *PNV = PN->hasConstantValue()) {
         PN->replaceAllUsesWith(PNV);
         PN->eraseFromParent();
       }

@@ -833,32 +833,40 @@ static bool DisassembleThumb1Misc(MCInst &MI, unsigned Opcode, uint32_t insn,
 // A8.6.53  LDM / LDMIA
 // A8.6.189 STM / STMIA
 //
-// tLDMIA_UPD/tSTMIA_UPD: tRt tRt AM4ModeImm Pred-Imm Pred-CCR register_list
-// tLDMIA:                tRt AM4ModeImm Pred-Imm Pred-CCR register_list
+// tLDM_UPD/tSTM_UPD: tRt tRt AM4ModeImm Pred-Imm Pred-CCR register_list
+// tLDM:              tRt AM4ModeImm Pred-Imm Pred-CCR register_list
 static bool DisassembleThumb1LdStMul(bool Ld, MCInst &MI, unsigned Opcode,
-                                     uint32_t insn, unsigned short NumOps,
-                                     unsigned &NumOpsAdded, BO B) {
-  assert((Opcode == ARM::tLDMIA || Opcode == ARM::tLDMIA_UPD ||
-          Opcode == ARM::tSTMIA_UPD) && "Unexpected opcode");
+    uint32_t insn, unsigned short NumOps, unsigned &NumOpsAdded, BO B) {
+
+  assert((Opcode == ARM::tLDM || Opcode == ARM::tLDM_UPD ||
+          Opcode == ARM::tSTM_UPD) && "Unexpected opcode");
+
+  unsigned &OpIdx = NumOpsAdded;
 
   unsigned tRt = getT1tRt(insn);
-  NumOpsAdded = 0;
+
+  OpIdx = 0;
 
   // WB register, if necessary.
-  if (Opcode == ARM::tLDMIA_UPD || Opcode == ARM::tSTMIA_UPD) {
+  if (Opcode == ARM::tLDM_UPD || Opcode == ARM::tSTM_UPD) {
     MI.addOperand(MCOperand::CreateReg(getRegisterEnum(B, ARM::GPRRegClassID,
                                                        tRt)));
-    ++NumOpsAdded;
+    ++OpIdx;
   }
 
   MI.addOperand(MCOperand::CreateReg(getRegisterEnum(B, ARM::GPRRegClassID,
                                                      tRt)));
-  ++NumOpsAdded;
+  ++OpIdx;
+
+  // A8.6.53 LDM / LDMIA / LDMFD - Encoding T1
+  // A8.6.53 STM / STMIA / STMEA - Encoding T1
+  MI.addOperand(MCOperand::CreateImm(ARM_AM::getAM4ModeImm(ARM_AM::ia)));
+  ++OpIdx;
 
   // Handling the two predicate operands before the reglist.
-  if (B->DoPredicateOperands(MI, Opcode, insn, NumOps)) {
-    NumOpsAdded += 2;
-  } else {
+  if (B->DoPredicateOperands(MI, Opcode, insn, NumOps))
+    OpIdx += 2;
+  else {
     DEBUG(errs() << "Expected predicate operands not found.\n");
     return false;
   }
@@ -866,12 +874,13 @@ static bool DisassembleThumb1LdStMul(bool Ld, MCInst &MI, unsigned Opcode,
   unsigned RegListBits = slice(insn, 7, 0);
 
   // Fill the variadic part of reglist.
-  for (unsigned i = 0; i < 8; ++i)
+  for (unsigned i = 0; i < 8; ++i) {
     if ((RegListBits >> i) & 1) {
       MI.addOperand(MCOperand::CreateReg(getRegisterEnum(B, ARM::tGPRRegClassID,
                                                          i)));
-      ++NumOpsAdded;
+      ++OpIdx;
     }
+  }
 
   return true;
 }
@@ -950,23 +959,22 @@ static bool DisassembleThumb1Br(MCInst &MI, unsigned Opcode, uint32_t insn,
 // corresponding to op.
 //
 // Table A6-1 16-bit Thumb instruction encoding (abridged)
-// op    Instruction or instruction class
-// ------  --------------------------------------------------------------------
-// 00xxxx  Shift (immediate), add, subtract, move, and compare on page A6-7
-// 010000  Data-processing on page A6-8
-// 010001  Special data instructions and branch and exchange on page A6-9
-// 01001x  Load from Literal Pool, see LDR (literal) on page A8-122
-// 0101xx  Load/store single data item on page A6-10
+// op		Instruction or instruction class
+// ------	--------------------------------------------------------------------
+// 00xxxx	Shift (immediate), add, subtract, move, and compare on page A6-7
+// 010000	Data-processing on page A6-8
+// 010001	Special data instructions and branch and exchange on page A6-9
+// 01001x	Load from Literal Pool, see LDR (literal) on page A8-122
+// 0101xx	Load/store single data item on page A6-10
 // 011xxx
 // 100xxx
-// 10100x  Generate PC-relative address, see ADR on page A8-32
-// 10101x  Generate SP-relative address, see ADD (SP plus immediate) on
-//         page A8-28
-// 1011xx  Miscellaneous 16-bit instructions on page A6-11
-// 11000x  Store multiple registers, see STM / STMIA / STMEA on page A8-374
-// 11001x  Load multiple registers, see LDM / LDMIA / LDMFD on page A8-110 a
-// 1101xx  Conditional branch, and Supervisor Call on page A6-13
-// 11100x  Unconditional Branch, see B on page A8-44
+// 10100x	Generate PC-relative address, see ADR on page A8-32
+// 10101x	Generate SP-relative address, see ADD (SP plus immediate) on page A8-28
+// 1011xx	Miscellaneous 16-bit instructions on page A6-11
+// 11000x	Store multiple registers, see STM / STMIA / STMEA on page A8-374
+// 11001x	Load multiple registers, see LDM / LDMIA / LDMFD on page A8-110 a
+// 1101xx	Conditional branch, and Supervisor Call on page A6-13
+// 11100x	Unconditional Branch, see B on page A8-44
 //
 static bool DisassembleThumb1(uint16_t op, MCInst &MI, unsigned Opcode,
     uint32_t insn, unsigned short NumOps, unsigned &NumOpsAdded, BO B) {
@@ -1113,31 +1121,34 @@ static bool DisassembleThumb2LdStMul(MCInst &MI, unsigned Opcode, uint32_t insn,
   if (Thumb2RFEOpcode(Opcode))
     return DisassembleThumb2RFE(MI, Opcode, insn, NumOps, NumOpsAdded, B);
 
-  assert((Opcode == ARM::t2LDMIA || Opcode == ARM::t2LDMIA_UPD ||
-          Opcode == ARM::t2LDMDB || Opcode == ARM::t2LDMDB_UPD ||
-          Opcode == ARM::t2STMIA || Opcode == ARM::t2STMIA_UPD ||
-          Opcode == ARM::t2STMDB || Opcode == ARM::t2STMDB_UPD)
+  assert((Opcode == ARM::t2LDM || Opcode == ARM::t2LDM_UPD ||
+          Opcode == ARM::t2STM || Opcode == ARM::t2STM_UPD)
          && "Unexpected opcode");
   assert(NumOps >= 5 && "Thumb2 LdStMul expects NumOps >= 5");
 
-  NumOpsAdded = 0;
+  unsigned &OpIdx = NumOpsAdded;
+
+  OpIdx = 0;
 
   unsigned Base = getRegisterEnum(B, ARM::GPRRegClassID, decodeRn(insn));
 
   // Writeback to base.
-  if (Opcode == ARM::t2LDMIA_UPD || Opcode == ARM::t2LDMDB_UPD ||
-      Opcode == ARM::t2STMIA_UPD || Opcode == ARM::t2STMDB_UPD) {
+  if (Opcode == ARM::t2LDM_UPD || Opcode == ARM::t2STM_UPD) {
     MI.addOperand(MCOperand::CreateReg(Base));
-    ++NumOpsAdded;
+    ++OpIdx;
   }
 
   MI.addOperand(MCOperand::CreateReg(Base));
-  ++NumOpsAdded;
+  ++OpIdx;
+
+  ARM_AM::AMSubMode SubMode = getAMSubModeForBits(getPUBits(insn));
+  MI.addOperand(MCOperand::CreateImm(ARM_AM::getAM4ModeImm(SubMode)));
+  ++OpIdx;
 
   // Handling the two predicate operands before the reglist.
-  if (B->DoPredicateOperands(MI, Opcode, insn, NumOps)) {
-    NumOpsAdded += 2;
-  } else {
+  if (B->DoPredicateOperands(MI, Opcode, insn, NumOps))
+    OpIdx += 2;
+  else {
     DEBUG(errs() << "Expected predicate operands not found.\n");
     return false;
   }
@@ -1145,12 +1156,13 @@ static bool DisassembleThumb2LdStMul(MCInst &MI, unsigned Opcode, uint32_t insn,
   unsigned RegListBits = insn & ((1 << 16) - 1);
 
   // Fill the variadic part of reglist.
-  for (unsigned i = 0; i < 16; ++i)
+  for (unsigned i = 0; i < 16; ++i) {
     if ((RegListBits >> i) & 1) {
       MI.addOperand(MCOperand::CreateReg(getRegisterEnum(B, ARM::GPRRegClassID,
                                                          i)));
-      ++NumOpsAdded;
+      ++OpIdx;
     }
+  }
 
   return true;
 }
@@ -1248,7 +1260,13 @@ static bool DisassembleThumb2LdStDual(MCInst &MI, unsigned Opcode,
   return true;
 }
 
-// t2TBB, t2TBH: Rn Rm Pred-Imm Pred-CCR
+// PC-based defined for Codegen, which do not get decoded by design:
+//
+// t2TBB, t2TBH: Rm immDontCare immDontCare
+//
+// Generic version defined for disassembly:
+//
+// t2TBBgen, t2TBHgen: Rn Rm Pred-Imm Pred-CCR
 static bool DisassembleThumb2TB(MCInst &MI, unsigned Opcode,
     uint32_t insn, unsigned short NumOps, unsigned &NumOpsAdded, BO B) {
 
@@ -1383,8 +1401,7 @@ static bool DisassembleThumb2DPSoReg(MCInst &MI, unsigned Opcode, uint32_t insn,
 //
 // Two register operands: Rs Rn ModImm
 // One register operands (Rs=0b1111 no explicit dest reg): Rn ModImm
-// One register operands (Rn=0b1111 no explicit src reg): Rs ModImm -
-// {t2MOVi, t2MVNi}
+// One register operands (Rn=0b1111 no explicit src reg): Rs ModImm - {t2MOVi, t2MVNi}
 //
 // ModImm = ThumbExpandImm(i:imm3:imm8)
 static bool DisassembleThumb2DPModImm(MCInst &MI, unsigned Opcode,
@@ -1711,12 +1728,12 @@ static inline bool Thumb2PreloadOpcode(unsigned Opcode) {
   switch (Opcode) {
   default:
     return false;
-  case ARM::t2PLDi12:   case ARM::t2PLDi8:
-  case ARM::t2PLDs:
-  case ARM::t2PLDWi12:  case ARM::t2PLDWi8:
-  case ARM::t2PLDWs:
-  case ARM::t2PLIi12:   case ARM::t2PLIi8:
-  case ARM::t2PLIs:
+  case ARM::t2PLDi12:   case ARM::t2PLDi8:   case ARM::t2PLDpci:
+  case ARM::t2PLDr:     case ARM::t2PLDs:
+  case ARM::t2PLDWi12:  case ARM::t2PLDWi8:  case ARM::t2PLDWpci:
+  case ARM::t2PLDWr:    case ARM::t2PLDWs:
+  case ARM::t2PLIi12:   case ARM::t2PLIi8:   case ARM::t2PLIpci:
+  case ARM::t2PLIr:     case ARM::t2PLIs:
     return true;
   }
 }
@@ -1752,7 +1769,8 @@ static bool DisassembleThumb2PreLoad(MCInst &MI, unsigned Opcode, uint32_t insn,
            && !OpInfo[OpIdx].isOptionalDef()
            && "Pure imm operand expected");
     int Offset = 0;
-    if (slice(insn, 19, 16) == 0xFF) {
+    if (Opcode == ARM::t2PLDpci || Opcode == ARM::t2PLDWpci ||
+             Opcode == ARM::t2PLIpci) {
       bool Negative = slice(insn, 23, 23) == 0;
       unsigned Imm12 = getImm12(insn);
       Offset = Negative ? -1 - Imm12 : 1 * Imm12;      
@@ -1817,15 +1835,13 @@ static bool DisassembleThumb2Ldpci(MCInst &MI, unsigned Opcode,
 //
 // t2LDRi12:   Rd Rn (+)imm12
 // t2LDRi8:    Rd Rn (+/-)imm8 (+ if Inst{9} == 0b1)
-// t2LDRs:     Rd Rn Rm ConstantShiftSpecifier (see also
-//             DisassembleThumb2DPSoReg)
+// t2LDRs:     Rd Rn Rm ConstantShiftSpecifier (see also DisassembleThumb2DPSoReg)
 // t2LDR_POST: Rd Rn Rn(TIED_TO) (+/-)imm8 (+ if Inst{9} == 0b1)
 // t2LDR_PRE:  Rd Rn Rn(TIED_TO) (+/-)imm8 (+ if Inst{9} == 0b1)
 //
 // t2STRi12:   Rd Rn (+)imm12
 // t2STRi8:    Rd Rn (+/-)imm8 (+ if Inst{9} == 0b1)
-// t2STRs:     Rd Rn Rm ConstantShiftSpecifier (see also
-//             DisassembleThumb2DPSoReg)
+// t2STRs:     Rd Rn Rm ConstantShiftSpecifier (see also DisassembleThumb2DPSoReg)
 // t2STR_POST: Rn Rd Rn(TIED_TO) (+/-)imm8 (+ if Inst{9} == 0b1)
 // t2STR_PRE:  Rn Rd Rn(TIED_TO) (+/-)imm8 (+ if Inst{9} == 0b1)
 //
@@ -2065,29 +2081,25 @@ static bool DisassembleThumb2LongMul(MCInst &MI, unsigned Opcode, uint32_t insn,
 // corresponding to (op1, op2, op).
 //
 // Table A6-9 32-bit Thumb instruction encoding
-// op1  op2    op  Instruction class, see
-// ---  -------  --  -----------------------------------------------------------
-// 01  00xx0xx  -  Load/store multiple on page A6-23
-//     00xx1xx  -  Load/store dual, load/store exclusive, table branch on
-//                 page A6-24
-//     01xxxxx  -  Data-processing (shifted register) on page A6-31
-//     1xxxxxx  -  Coprocessor instructions on page A6-40
-// 10  x0xxxxx  0  Data-processing (modified immediate) on page A6-15
-//     x1xxxxx  0  Data-processing (plain binary immediate) on page A6-19
-//         -    1  Branches and miscellaneous control on page A6-20
-// 11  000xxx0  -  Store single data item on page A6-30
-//     001xxx0  -  Advanced SIMD element or structure load/store instructions
-//                 on page A7-27
-//     00xx001  - Load byte, memory hints on page A6-28
-//     00xx011  -  Load halfword, memory hints on page A6-26
-//     00xx101  -  Load word on page A6-25
-//     00xx111  -  UNDEFINED
-//     010xxxx  -  Data-processing (register) on page A6-33
-//     0110xxx  -  Multiply, multiply accumulate, and absolute difference on
-//                 page A6-38
-//     0111xxx  -  Long multiply, long multiply accumulate, and divide on
-//                 page A6-39
-//     1xxxxxx  -  Coprocessor instructions on page A6-40
+// op1	op2		op	Instruction class, see
+// ---	-------	--	------------------------------------------------------------
+// 01	00xx0xx	-	Load/store multiple on page A6-23
+// 		00xx1xx	-	Load/store dual, load/store exclusive, table branch on page A6-24
+// 		01xxxxx	-	Data-processing (shifted register) on page A6-31
+// 		1xxxxxx	-	Coprocessor instructions on page A6-40
+// 10	x0xxxxx	0	Data-processing (modified immediate) on page A6-15
+// 		x1xxxxx	0	Data-processing (plain binary immediate) on page A6-19
+// 		-		1	Branches and miscellaneous control on page A6-20
+// 11	000xxx0	-	Store single data item on page A6-30
+// 		001xxx0	-	Advanced SIMD element or structure load/store instructions on page A7-27
+// 		00xx001 -	Load byte, memory hints on page A6-28
+// 		00xx011	-	Load halfword, memory hints on page A6-26
+// 		00xx101	-	Load word on page A6-25
+// 		00xx111	-	UNDEFINED
+// 		010xxxx	-	Data-processing (register) on page A6-33
+// 		0110xxx	-	Multiply, multiply accumulate, and absolute difference on page A6-38
+// 		0111xxx	-	Long multiply, long multiply accumulate, and divide on page A6-39
+// 		1xxxxxx	-	Coprocessor instructions on page A6-40
 //
 static bool DisassembleThumb2(uint16_t op1, uint16_t op2, uint16_t op,
     MCInst &MI, unsigned Opcode, uint32_t insn, unsigned short NumOps,
@@ -2118,7 +2130,7 @@ static bool DisassembleThumb2(uint16_t op1, uint16_t op2, uint16_t op,
         return DisassembleThumb2LdStDual(MI, Opcode, insn, NumOps, NumOpsAdded,
                                          B);
       }
-      if (Opcode == ARM::t2TBB || Opcode == ARM::t2TBH) {
+      if (Opcode == ARM::t2TBBgen || Opcode == ARM::t2TBHgen) {
         // Table branch.
         return DisassembleThumb2TB(MI, Opcode, insn, NumOps, NumOpsAdded, B);
       }
@@ -2163,8 +2175,7 @@ static bool DisassembleThumb2(uint16_t op1, uint16_t op2, uint16_t op,
         }
       } else {
         // Table A6-9 32-bit Thumb instruction encoding: Load byte|halfword|word
-        return DisassembleThumb2LdSt(true, MI, Opcode, insn, NumOps,
-                                     NumOpsAdded, B);
+        return DisassembleThumb2LdSt(true, MI,Opcode,insn,NumOps,NumOpsAdded, B);
       }
       break;
     case 1:

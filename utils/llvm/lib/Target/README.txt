@@ -2,38 +2,6 @@ Target Independent Opportunities:
 
 //===---------------------------------------------------------------------===//
 
-We should recognize idioms for add-with-carry and turn it into the appropriate
-intrinsics.  This example:
-
-unsigned add32carry(unsigned sum, unsigned x) {
- unsigned z = sum + x;
- if (sum + x < x)
-     z++;
- return z;
-}
-
-Compiles to: clang t.c -S -o - -O3 -fomit-frame-pointer -m64 -mkernel
-
-_add32carry:                            ## @add32carry
-	addl	%esi, %edi
-	cmpl	%esi, %edi
-	sbbl	%eax, %eax
-	andl	$1, %eax
-	addl	%edi, %eax
-	ret
-
-with clang, but to:
-
-_add32carry:
-	leal	(%rsi,%rdi), %eax
-	cmpl	%esi, %eax
-	adcl	$0, %eax
-	ret
-
-with gcc.
-
-//===---------------------------------------------------------------------===//
-
 Dead argument elimination should be enhanced to handle cases when an argument is
 dead to an externally visible function.  Though the argument can't be removed
 from the externally visible function, the caller doesn't need to pass it in.
@@ -938,6 +906,16 @@ The expression should optimize to something like
 
 //===---------------------------------------------------------------------===//
 
+void a(int variable)
+{
+ if (variable == 4 || variable == 6)
+   bar();
+}
+This should optimize to "if ((variable | 2) == 6)".  Currently not
+optimized with "clang -emit-llvm-bc | opt -std-compile-opts | llc".
+
+//===---------------------------------------------------------------------===//
+
 unsigned int f(unsigned int i, unsigned int n) {++i; if (i == n) ++i; return
 i;}
 unsigned int f2(unsigned int i, unsigned int n) {++i; i += i == n; return i;}
@@ -1330,6 +1308,12 @@ void foo (int a, struct T b)
 
 simplifylibcalls should do several optimizations for strspn/strcspn:
 
+strcspn(x, "") -> strlen(x)
+strcspn("", x) -> 0
+strspn("", x) -> 0
+strspn(x, "") -> strlen(x)
+strspn(x, "a") -> strchr(x, 'a')-x
+
 strcspn(x, "a") -> inlined loop for up to 3 letters (similarly for strspn):
 
 size_t __strcspn_c3 (__const char *__s, int __reject1, int __reject2,
@@ -1525,6 +1509,22 @@ the float directly.
 
 //===---------------------------------------------------------------------===//
 
+#include <math.h>
+double foo(double a) {    return sin(a); }
+
+This compiles into this on x86-64 Linux:
+foo:
+	subq	$8, %rsp
+	call	sin
+	addq	$8, %rsp
+	ret
+vs:
+
+foo:
+        jmp sin
+
+//===---------------------------------------------------------------------===//
+
 The arg promotion pass should make use of nocapture to make its alias analysis
 stuff much more precise.
 
@@ -1689,6 +1689,14 @@ This should be optimized to a single compare.  Testcase derived from gcc.
 
 //===---------------------------------------------------------------------===//
 
+Missed instcombine transformation:
+void b();
+void a(int x) { if (((1<<x)&8)==0) b(); }
+
+The shift should be optimized out.  Testcase derived from gcc.
+
+//===---------------------------------------------------------------------===//
+
 Missed instcombine or reassociate transformation:
 int a(int a, int b) { return (a==12)&(b>47)&(b<58); }
 
@@ -1698,35 +1706,28 @@ from gcc.
 //===---------------------------------------------------------------------===//
 
 Missed instcombine transformation:
+define i32 @a(i32 %x) nounwind readnone {
+entry:
+  %rem = srem i32 %x, 32
+  %shl = shl i32 1, %rem
+  ret i32 %shl
+}
 
-  %382 = srem i32 %tmp14.i, 64                    ; [#uses=1]
-  %383 = zext i32 %382 to i64                     ; [#uses=1]
-  %384 = shl i64 %381, %383                       ; [#uses=1]
-  %385 = icmp slt i32 %tmp14.i, 64                ; [#uses=1]
-
-The srem can be transformed to an and because if %tmp14.i is negative, the
-shift is undefined.  Testcase derived from 403.gcc.
+The srem can be transformed to an and because if x is negative, the shift is
+undefined. Testcase derived from gcc.
 
 //===---------------------------------------------------------------------===//
 
-This is a range comparison on a divided result (from 403.gcc):
+Missed instcombine/dagcombine transformation:
+define i32 @a(i32 %x, i32 %y) nounwind readnone {
+entry:
+  %mul = mul i32 %y, -8
+  %sub = sub i32 %x, %mul
+  ret i32 %sub
+}
 
-  %1337 = sdiv i32 %1336, 8                       ; [#uses=1]
-  %.off.i208 = add i32 %1336, 7                   ; [#uses=1]
-  %1338 = icmp ult i32 %.off.i208, 15             ; [#uses=1]
-  
-We already catch this (removing the sdiv) if there isn't an add, we should
-handle the 'add' as well.  This is a common idiom with it's builtin_alloca code.
-C testcase:
-
-int a(int x) { return (unsigned)(x/16+7) < 15; }
-
-Another similar case involves truncations on 64-bit targets:
-
-  %361 = sdiv i64 %.046, 8                        ; [#uses=1]
-  %362 = trunc i64 %361 to i32                    ; [#uses=2]
-...
-  %367 = icmp eq i32 %362, 0                      ; [#uses=1]
+Should compile to something like x+y*8, but currently compiles to an
+inefficient result.  Testcase derived from gcc.
 
 //===---------------------------------------------------------------------===//
 
@@ -1936,52 +1937,3 @@ bb3:            ; preds = %entry
         ret i32 %b
 }
 //===---------------------------------------------------------------------===//
-
-clang -O3 fails to devirtualize this virtual inheritance case: (GCC PR45875)
-Looks related to PR3100
-
-struct c1 {};
-struct c10 : c1{
-  virtual void foo ();
-};
-struct c11 : c10, c1{
-  virtual void f6 ();
-};
-struct c28 : virtual c11{
-  void f6 ();
-};
-void check_c28 () {
-  c28 obj;
-  c11 *ptr = &obj;
-  ptr->f6 ();
-}
-
-//===---------------------------------------------------------------------===//
-
-We compile this:
-
-int foo(int a) { return (a & (~15)) / 16; }
-
-Into:
-
-define i32 @foo(i32 %a) nounwind readnone ssp {
-entry:
-  %and = and i32 %a, -16
-  %div = sdiv i32 %and, 16
-  ret i32 %div
-}
-
-but this code (X & -A)/A is X >> log2(A) when A is a power of 2, so this case
-should be instcombined into just "a >> 4".
-
-We do get this at the codegen level, so something knows about it, but 
-instcombine should catch it earlier:
-
-_foo:                                   ## @foo
-## BB#0:                                ## %entry
-	movl	%edi, %eax
-	sarl	$4, %eax
-	ret
-
-//===---------------------------------------------------------------------===//
-

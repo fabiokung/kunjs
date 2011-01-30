@@ -15,7 +15,7 @@
 #ifndef LLVM_CODEGEN_MACHO_RELOCATION_H
 #define LLVM_CODEGEN_MACHO_RELOCATION_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
 

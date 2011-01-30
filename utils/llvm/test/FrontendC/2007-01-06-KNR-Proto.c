@@ -1,4 +1,4 @@
-// RUN: %llvmgcc -S -o - %s
+// RUN: %llvmgcc -S -o - -emit-llvm %s
 // PR1083
 
 int svc_register (void (*dispatch) (int));

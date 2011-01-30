@@ -1,20 +1,6 @@
-; RUN: llc -O0 -asm-verbose < %s | FileCheck %s
+; RUN: llc -O0 -asm-verbose  %s -o %t
+; RUN: grep DW_TAG_compile_unit %t | count 3
 ; One for a.c, second one for b.c and third one for abbrev.
-
-; CHECK: info_begin
-; CHECK: DW_TAG_compile_unit
-; CHECK-NOT: DW_TAG_compile_unit
-; CHECK: info_end
-
-; CHECK: info_begin
-; CHECK: DW_TAG_compile_unit
-; CHECK-NOT: DW_TAG_compile_unit
-; CHECK: info_end
-
-; CHECK: abbrev_begin
-; CHECK: DW_TAG_compile_unit
-; CHECK-NOT: DW_TAG_compile_unit
-; CHECK: abbrev_end
 
 define i32 @foo() nounwind readnone ssp {
 return:

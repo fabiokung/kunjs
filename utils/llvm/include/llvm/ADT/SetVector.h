@@ -114,15 +114,13 @@ public:
   }
 
   /// @brief Remove an item from the set vector.
-  bool remove(const value_type& X) {
+  void remove(const value_type& X) {
     if (set_.erase(X)) {
       typename vector_type::iterator I =
         std::find(vector_.begin(), vector_.end(), X);
       assert(I != vector_.end() && "Corrupted SetVector instances!");
       vector_.erase(I);
-      return true;
     }
-    return false;
   }
 
 

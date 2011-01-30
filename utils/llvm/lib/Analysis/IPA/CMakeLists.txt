@@ -3,5 +3,4 @@ add_llvm_library(LLVMipa
   CallGraphSCCPass.cpp
   FindUsedTypes.cpp
   GlobalsModRef.cpp
-  IPA.cpp
   )

@@ -142,10 +142,10 @@ namespace llvm {
 
   private:
 
-    bool Error(LocTy L, const Twine &Msg) const {
+    bool Error(LocTy L, const std::string &Msg) const {
       return Lex.Error(L, Msg);
     }
-    bool TokError(const Twine &Msg) const {
+    bool TokError(const std::string &Msg) const {
       return Error(Lex.getLoc(), Msg);
     }
 

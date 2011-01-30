@@ -30,7 +30,6 @@ namespace llvm {
   class StringRef;
   class Twine;
   class MCSectionMachO;
-  class MCSectionELF;
 
   /// MCContext - Context object for machine code objects.  This class owns all
   /// of the sections that it creates.
@@ -45,10 +44,6 @@ namespace llvm {
     /// Symbols - Bindings of names to symbols.
     StringMap<MCSymbol*> Symbols;
 
-    /// UsedNames - Keeps tracks of names that were used both for used declared
-    /// and artificial symbols.
-    StringMap<bool> UsedNames;
-
     /// NextUniqueID - The next ID to dole out to an unnamed assembler temporary
     /// symbol.
     unsigned NextUniqueID;
@@ -61,8 +56,8 @@ namespace llvm {
     /// GetInstance() gets the current instance of the directional local label
     /// for the LocalLabelVal and adds it to the map if needed.
     unsigned GetInstance(int64_t LocalLabelVal);
-
-    /// The file name of the log file from the environment variable
+    
+    /// The file name of the log file from the enviromment variable
     /// AS_SECURE_LOG_FILE.  Which must be set before the .secure_log_unique
     /// directive is used or it is an error.
     char *SecureLogFile;
@@ -84,35 +79,29 @@ namespace llvm {
     /// The dwarf line information from the .loc directives for the sections
     /// with assembled machine instructions have after seeing .loc directives.
     DenseMap<const MCSection *, MCLineSection *> MCLineSections;
-    /// We need a deterministic iteration order, so we remember the order
-    /// the elements were added.
-    std::vector<const MCSection *> MCLineSectionOrder;
 
     /// Allocator - Allocator object used for creating machine code objects.
     ///
     /// We use a bump pointer allocator to avoid the need to track all allocated
     /// objects.
     BumpPtrAllocator Allocator;
-
+    
     void *MachOUniquingMap, *ELFUniquingMap, *COFFUniquingMap;
-
-    MCSymbol *CreateSymbol(StringRef Name);
-
   public:
     explicit MCContext(const MCAsmInfo &MAI);
     ~MCContext();
-
+    
     const MCAsmInfo &getAsmInfo() const { return MAI; }
 
-    /// @name Symbol Management
+    /// @name Symbol Managment
     /// @{
-
+    
     /// CreateTempSymbol - Create and return a new assembler temporary symbol
     /// with a unique but unspecified name.
     MCSymbol *CreateTempSymbol();
 
-    /// CreateDirectionalLocalSymbol - Create the definition of a directional
-    /// local symbol for numbered label (used for "1:" definitions).
+    /// CreateDirectionalLocalSymbol - Create the defintion of a directional
+    /// local symbol for numbered label (used for "1:" defintions).
     MCSymbol *CreateDirectionalLocalSymbol(int64_t LocalLabelVal);
 
     /// GetDirectionalLocalSymbol - Create and return a directional local
@@ -131,8 +120,8 @@ namespace llvm {
     MCSymbol *LookupSymbol(StringRef Name) const;
 
     /// @}
-
-    /// @name Section Management
+    
+    /// @name Section Managment
     /// @{
 
     /// getMachOSection - Return the MCSection for the specified mach-o section.
@@ -148,15 +137,11 @@ namespace llvm {
                                           SectionKind K) {
       return getMachOSection(Segment, Section, TypeAndAttributes, 0, K);
     }
-
-    const MCSectionELF *getELFSection(StringRef Section, unsigned Type,
-                                      unsigned Flags, SectionKind Kind);
-
-    const MCSectionELF *getELFSection(StringRef Section, unsigned Type,
-                                      unsigned Flags, SectionKind Kind,
-                                      unsigned EntrySize, StringRef Group);
-
-    const MCSectionELF *CreateELFGroupSection();
+    
+    const MCSection *getELFSection(StringRef Section, unsigned Type,
+                                   unsigned Flags, SectionKind Kind,
+                                   bool IsExplicit = false,
+                                   unsigned EntrySize = 0);
 
     const MCSection *getCOFFSection(StringRef Section, unsigned Characteristics,
                                     int Selection, SectionKind Kind);
@@ -166,20 +151,16 @@ namespace llvm {
       return getCOFFSection (Section, Characteristics, 0, Kind);
     }
 
-
+    
     /// @}
 
-    /// @name Dwarf Management
+    /// @name Dwarf Managment
     /// @{
 
     /// GetDwarfFile - creates an entry in the dwarf file and directory tables.
     unsigned GetDwarfFile(StringRef FileName, unsigned FileNumber);
 
-    bool isValidDwarfFileNumber(unsigned FileNumber);
-
-    bool hasDwarfFiles() const {
-      return !MCDwarfFiles.empty();
-    }
+    bool ValidateDwarfFileNumber(unsigned FileNumber);
 
     const std::vector<MCDwarfFile *> &getMCDwarfFiles() {
       return MCDwarfFiles;
@@ -187,35 +168,23 @@ namespace llvm {
     const std::vector<StringRef> &getMCDwarfDirs() {
       return MCDwarfDirs;
     }
-
-    const DenseMap<const MCSection *, MCLineSection *>
-    &getMCLineSections() const {
+    DenseMap<const MCSection *, MCLineSection *> &getMCLineSections() {
       return MCLineSections;
-    }
-    const std::vector<const MCSection *> &getMCLineSectionOrder() const {
-      return MCLineSectionOrder;
-    }
-    void addMCLineSection(const MCSection *Sec, MCLineSection *Line) {
-      MCLineSections[Sec] = Line;
-      MCLineSectionOrder.push_back(Sec);
     }
 
     /// setCurrentDwarfLoc - saves the information from the currently parsed
-    /// dwarf .loc directive and sets DwarfLocSeen.  When the next instruction
-    /// is assembled an entry in the line number table with this information and
+    /// dwarf .loc directive and sets DwarfLocSeen.  When the next instruction      /// is assembled an entry in the line number table with this information and
     /// the address of the instruction will be created.
     void setCurrentDwarfLoc(unsigned FileNum, unsigned Line, unsigned Column,
-                            unsigned Flags, unsigned Isa,
-                            unsigned Discriminator) {
+                            unsigned Flags, unsigned Isa) {
       CurrentDwarfLoc.setFileNum(FileNum);
       CurrentDwarfLoc.setLine(Line);
       CurrentDwarfLoc.setColumn(Column);
       CurrentDwarfLoc.setFlags(Flags);
       CurrentDwarfLoc.setIsa(Isa);
-      CurrentDwarfLoc.setDiscriminator(Discriminator);
       DwarfLocSeen = true;
     }
-    void ClearDwarfLocSeen() { DwarfLocSeen = false; }
+    void clearDwarfLocSeen() { DwarfLocSeen = false; }
 
     bool getDwarfLocSeen() { return DwarfLocSeen; }
     const MCDwarfLoc &getCurrentDwarfLoc() { return CurrentDwarfLoc; }

@@ -1,4 +1,4 @@
-// RUN: %llvmgcc -S %s  -o /dev/null
+// RUN: %llvmgcc -c %s  -o /dev/null
 static char *str;
 
 static const struct {

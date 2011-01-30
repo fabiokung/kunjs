@@ -16,7 +16,6 @@
 
 include "llvm/Target/Target.td"
 
-
 //===----------------------------------------------------------------------===//
 // ARM Subtarget features.
 //
@@ -33,8 +32,6 @@ def FeatureNoARM  : SubtargetFeature<"noarm", "NoARM", "true",
                                      "Does not support ARM mode execution">;
 def FeatureFP16   : SubtargetFeature<"fp16", "HasFP16", "true",
                                      "Enable half-precision floating point">;
-def FeatureD16    : SubtargetFeature<"d16", "HasD16", "true",
-                                     "Restrict VFP3 to 16 double registers">;
 def FeatureHWDiv  : SubtargetFeature<"hwdiv", "HasHardwareDivide", "true",
                                      "Enable divide instructions">;
 def FeatureT2XtPk : SubtargetFeature<"t2xtpk", "HasT2ExtractPack", "true",
@@ -64,9 +61,6 @@ def FeatureNEONForFP : SubtargetFeature<"neonfp", "UseNEONForSinglePrecisionFP",
 def FeaturePref32BitThumb : SubtargetFeature<"32bit", "Pref32BitThumb", "true",
                                              "Prefer 32-bit Thumb instrs">;
 
-// Multiprocessing extension.
-def FeatureMP : SubtargetFeature<"mp", "HasMPExtension", "true",
-                                 "Supports Multiprocessing extension">;
 
 // ARM architectures.
 def ArchV4T     : SubtargetFeature<"v4t", "ARMArchVersion", "V4T",
@@ -96,15 +90,6 @@ def ArchV7M     : SubtargetFeature<"v7m", "ARMArchVersion", "V7M",
 //
 
 include "ARMSchedule.td"
-
-// ARM processor families.
-def ProcOthers  : SubtargetFeature<"others", "ARMProcFamily", "Others",
-                                   "One of the other ARM processor families">;
-def ProcA8      : SubtargetFeature<"a8", "ARMProcFamily", "CortexA8",
-                                   "Cortex-A8 ARM processors",
-                                   [FeatureSlowFPBrcc, FeatureNEONForFP]>;
-def ProcA9      : SubtargetFeature<"a9", "ARMProcFamily", "CortexA9",
-                                   "Cortex-A9 ARM processors">;
 
 class ProcNoItin<string Name, list<SubtargetFeature> Features>
  : Processor<Name, GenericItineraries, Features>;
@@ -165,11 +150,10 @@ def : Processor<"arm1156t2f-s",     ARMV6Itineraries, [ArchV6T2, FeatureVFP2]>;
 
 // V7 Processors.
 def : Processor<"cortex-a8",        CortexA8Itineraries,
-                                    [ArchV7A, ProcA8,
-                                     FeatureHasSlowVMLx, FeatureT2XtPk]>;
+                [ArchV7A, FeatureHasSlowVMLx,
+                 FeatureSlowFPBrcc, FeatureNEONForFP, FeatureT2XtPk]>;
 def : Processor<"cortex-a9",        CortexA9Itineraries,
-                                    [ArchV7A, ProcA9,
-                                     FeatureHasSlowVMLx, FeatureT2XtPk]>;
+                [ArchV7A, FeatureT2XtPk]>;
 
 // V7M Processors.
 def : ProcNoItin<"cortex-m3",       [ArchV7M]>;
@@ -191,17 +175,6 @@ include "ARMInstrInfo.td"
 
 def ARMInstrInfo : InstrInfo;
 
-
-//===----------------------------------------------------------------------===//
-// Assembly printer
-//===----------------------------------------------------------------------===//
-// ARM Uses the MC printer for asm output, so make sure the TableGen
-// AsmWriter bits get associated with the correct class.
-def ARMAsmWriter : AsmWriter {
-  string AsmWriterClassName  = "InstPrinter";
-  bit isMCAsmWriter = 1;
-}
-
 //===----------------------------------------------------------------------===//
 // Declare the target which we are implementing
 //===----------------------------------------------------------------------===//
@@ -209,6 +182,4 @@ def ARMAsmWriter : AsmWriter {
 def ARM : Target {
   // Pull in Instruction Info:
   let InstructionSet = ARMInstrInfo;
-
-  let AssemblyWriters = [ARMAsmWriter];
 }

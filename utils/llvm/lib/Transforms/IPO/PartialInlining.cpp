@@ -30,9 +30,7 @@ namespace {
   struct PartialInliner : public ModulePass {
     virtual void getAnalysisUsage(AnalysisUsage &AU) const { }
     static char ID; // Pass identification, replacement for typeid
-    PartialInliner() : ModulePass(ID) {
-      initializePartialInlinerPass(*PassRegistry::getPassRegistry());
-    }
+    PartialInliner() : ModulePass(ID) {}
     
     bool runOnModule(Module& M);
     
@@ -43,7 +41,7 @@ namespace {
 
 char PartialInliner::ID = 0;
 INITIALIZE_PASS(PartialInliner, "partial-inliner",
-                "Partial Inliner", false, false)
+                "Partial Inliner", false, false);
 
 ModulePass* llvm::createPartialInliningPass() { return new PartialInliner(); }
 
@@ -69,7 +67,7 @@ Function* PartialInliner::unswitchFunction(Function* F) {
     return 0;
   
   // Clone the function, so that we can hack away on it.
-  ValueToValueMapTy VMap;
+  ValueMap<const Value*, Value*> VMap;
   Function* duplicateFunction = CloneFunction(F, VMap,
                                               /*ModuleLevelChanges=*/false);
   duplicateFunction->setLinkage(GlobalValue::InternalLinkage);

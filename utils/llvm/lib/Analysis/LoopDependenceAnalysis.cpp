@@ -46,12 +46,8 @@ LoopPass *llvm::createLoopDependenceAnalysisPass() {
   return new LoopDependenceAnalysis();
 }
 
-INITIALIZE_PASS_BEGIN(LoopDependenceAnalysis, "lda",
-                "Loop Dependence Analysis", false, true)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_END(LoopDependenceAnalysis, "lda",
-                "Loop Dependence Analysis", false, true)
+INITIALIZE_PASS(LoopDependenceAnalysis, "lda",
+                "Loop Dependence Analysis", false, true);
 char LoopDependenceAnalysis::ID = 0;
 
 //===----------------------------------------------------------------------===//
@@ -132,7 +128,7 @@ void LoopDependenceAnalysis::getLoops(const SCEV *S,
                                       DenseSet<const Loop*>* Loops) const {
   // Refactor this into an SCEVVisitor, if efficiency becomes a concern.
   for (const Loop *L = this->L; L != 0; L = L->getParentLoop())
-    if (!SE->isLoopInvariant(S, L))
+    if (!S->isLoopInvariant(L))
       Loops->insert(L);
 }
 

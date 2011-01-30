@@ -95,9 +95,6 @@ bool llvm::PointerMayBeCaptured(const Value *V,
     case Instruction::Load:
       // Loading from a pointer does not cause it to be captured.
       break;
-    case Instruction::VAArg:
-      // "va-arg" from a pointer does not cause it to be captured.
-      break;
     case Instruction::Ret:
       if (ReturnCaptures)
         return true;

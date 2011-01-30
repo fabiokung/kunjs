@@ -127,10 +127,6 @@ public:
   ///
   unsigned short getAsmPrinterFlags() const { return AsmPrinterFlags; }
 
-  /// clearAsmPrinterFlags - clear the AsmPrinter bitvector
-  ///
-  void clearAsmPrinterFlags() { AsmPrinterFlags = 0; }
-  
   /// getAsmPrinterFlag - Return whether an AsmPrinter flag is set.
   ///
   bool getAsmPrinterFlag(CommentFlag Flag) const {
@@ -141,12 +137,6 @@ public:
   ///
   void setAsmPrinterFlag(CommentFlag Flag) {
     AsmPrinterFlags |= (unsigned short)Flag;
-  }
-  
-  /// clearAsmPrinterFlag - clear specific AsmPrinter flags
-  ///
-  void clearAsmPrinterFlag(CommentFlag Flag) {
-    AsmPrinterFlags &= ~Flag;
   }
 
   /// getDebugLoc - Returns the debug location id of this MachineInstr.
@@ -177,17 +167,7 @@ public:
   /// getNumExplicitOperands - Returns the number of non-implicit operands.
   ///
   unsigned getNumExplicitOperands() const;
-
-  /// iterator/begin/end - Iterate over all operands of a machine instruction.
-  typedef std::vector<MachineOperand>::iterator mop_iterator;
-  typedef std::vector<MachineOperand>::const_iterator const_mop_iterator;
-
-  mop_iterator operands_begin() { return Operands.begin(); }
-  mop_iterator operands_end() { return Operands.end(); }
-
-  const_mop_iterator operands_begin() const { return Operands.begin(); }
-  const_mop_iterator operands_end() const { return Operands.end(); }
-
+  
   /// Access to memory operands of the instruction
   mmo_iterator memoperands_begin() const { return MemRefs; }
   mmo_iterator memoperands_end() const { return MemRefsEnd; }
@@ -435,10 +415,6 @@ public:
   /// allDefsAreDead - Return true if all the defs of this instruction are dead.
   ///
   bool allDefsAreDead() const;
-
-  /// copyImplicitOps - Copy implicit register operands from specified
-  /// instruction to this instruction.
-  void copyImplicitOps(const MachineInstr *MI);
 
   //
   // Debugging support

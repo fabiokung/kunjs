@@ -12,9 +12,8 @@ entry:
 ; CHECK: 	long	269488144
 ; CHECK:	long	66051
 ; CHECK: 	long	67438087
-; CHECK-NOT: rotqmbyi
-; CHECK:	lqa
 ; CHECK: 	rotmai
+; CHECK:	lqa
 ; CHECK:	shufb
 }
 
@@ -26,9 +25,8 @@ entry:
 ; CHECK: 	long	269488144
 ; CHECK: 	long	269488144
 ; CHECK:	long	66051
-; CHECK-NOT: rotqmbyi
-; CHECK:	lqa
 ; CHECK: 	rotmai
+; CHECK:	lqa
 ; CHECK:	shufb
 }
 
@@ -41,9 +39,8 @@ entry:
 ; CHECK: 	long	269488144
 ; CHECK: 	long	269488144
 ; CHECK:	long	66051
-; CHECK-NOT: rotqmbyi
-; CHECK:	lqa
 ; CHECK: 	rotmai
+; CHECK:	lqa
 ; CHECK:	shufb
 }
 

@@ -1,4 +1,4 @@
-// RUN: %llvmgcc %s -S
+// RUN: %llvmgcc %s -S -emit-llvm
 struct TRunSoon {
   template <class P1> static void Post() {}
 };

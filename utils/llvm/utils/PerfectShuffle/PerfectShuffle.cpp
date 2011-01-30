@@ -15,7 +15,6 @@
 //===----------------------------------------------------------------------===//
 
 #include <iostream>
-#include <iomanip>
 #include <vector>
 #include <cassert>
 #include <cstdlib>
@@ -401,7 +400,7 @@ int main() {
     // LHS, and 13 bits of RHS = 32 bits.
     unsigned Val = (CostSat << 30) | (OpNum << 26) | (LHS << 13) | RHS;
 
-    std::cout << "  " << std::setw(10) << Val << "U, // ";
+    std::cout << "  " << Val << "U,\t// ";
     PrintMask(i, std::cout);
     std::cout << ": Cost " << ShufTab[i].Cost;
     std::cout << " " << (ShufTab[i].Op ? ShufTab[i].Op->getName() : "copy");

@@ -16,7 +16,7 @@
 #define RECORD_H
 
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include "llvm/Support/raw_ostream.h"
 #include <map>
 
@@ -848,7 +848,7 @@ public:
 ///
 class BinOpInit : public OpInit {
 public:
-  enum BinaryOp { SHL, SRA, SRL, STRCONCAT, CONCAT, EQ };
+  enum BinaryOp { SHL, SRA, SRL, STRCONCAT, CONCAT, NAMECONCAT, EQ };
 private:
   BinaryOp Opc;
   Init *LHS, *RHS;
@@ -1233,10 +1233,10 @@ public:
     ID(LastID++), Name(N), Loc(loc) {}
   ~Record() {}
 
-
+  
   static unsigned getNewUID() { return LastID++; }
-
-
+    
+    
   unsigned getID() const { return ID; }
 
   const std::string &getName() const { return Name; }
@@ -1350,9 +1350,9 @@ public:
   ///
   std::vector<Record*> getValueAsListOfDefs(StringRef FieldName) const;
 
-  /// getValueAsListOfInts - This method looks up the specified field and
-  /// returns its value as a vector of integers, throwing an exception if the
-  /// field does not exist or if the value is not the right type.
+  /// getValueAsListOfInts - This method looks up the specified field and returns
+  /// its value as a vector of integers, throwing an exception if the field does
+  /// not exist or if the value is not the right type.
   ///
   std::vector<int64_t> getValueAsListOfInts(StringRef FieldName) const;
 
@@ -1490,7 +1490,7 @@ raw_ostream &operator<<(raw_ostream &OS, const RecordKeeper &RK);
 
 extern RecordKeeper Records;
 
-void PrintError(SMLoc ErrorLoc, const Twine &Msg);
+void PrintError(SMLoc ErrorLoc, const std::string &Msg);
 
 } // End llvm namespace
 

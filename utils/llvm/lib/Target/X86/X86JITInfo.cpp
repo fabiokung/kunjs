@@ -19,7 +19,7 @@
 #include "llvm/Function.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/Valgrind.h"
+#include "llvm/System/Valgrind.h"
 #include <cstdlib>
 #include <cstring>
 using namespace llvm;
@@ -337,7 +337,7 @@ extern "C" {
  // no support for inline assembly
 static
 #endif
-void LLVM_ATTRIBUTE_USED
+void ATTRIBUTE_USED
 X86CompilationCallback2(intptr_t *StackPtr, intptr_t RetAddr) {
   intptr_t *RetAddrLoc = &StackPtr[1];
   assert(*RetAddrLoc == RetAddr &&

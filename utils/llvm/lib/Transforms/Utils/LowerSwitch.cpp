@@ -33,9 +33,7 @@ namespace {
   class LowerSwitch : public FunctionPass {
   public:
     static char ID; // Pass identification, replacement for typeid
-    LowerSwitch() : FunctionPass(ID) {
-      initializeLowerSwitchPass(*PassRegistry::getPassRegistry());
-    } 
+    LowerSwitch() : FunctionPass(ID) {} 
 
     virtual bool runOnFunction(Function &F);
     
@@ -82,7 +80,7 @@ namespace {
 
 char LowerSwitch::ID = 0;
 INITIALIZE_PASS(LowerSwitch, "lowerswitch",
-                "Lower SwitchInst's to branches", false, false)
+                "Lower SwitchInst's to branches", false, false);
 
 // Publically exposed interface to pass...
 char &llvm::LowerSwitchID = LowerSwitch::ID;
@@ -109,8 +107,7 @@ bool LowerSwitch::runOnFunction(Function &F) {
 // operator<< - Used for debugging purposes.
 //
 static raw_ostream& operator<<(raw_ostream &O,
-                               const LowerSwitch::CaseVector &C)
-    LLVM_ATTRIBUTE_USED;
+                               const LowerSwitch::CaseVector &C) ATTRIBUTE_USED;
 static raw_ostream& operator<<(raw_ostream &O,
                                const LowerSwitch::CaseVector &C) {
   O << "[";

@@ -23,9 +23,6 @@ include "llvm/Target/Target.td"
 def FeatureCMOV    : SubtargetFeature<"cmov","HasCMov", "true",
                                       "Enable conditional move instructions">;
 
-def FeaturePOPCNT   : SubtargetFeature<"popcnt", "HasPOPCNT", "true",
-                                       "Support POPCNT instruction">;
-
 
 def FeatureMMX     : SubtargetFeature<"mmx","X86SSELevel", "MMX",
                                       "Enable MMX instructions">;
@@ -48,7 +45,7 @@ def FeatureSSE41   : SubtargetFeature<"sse41", "X86SSELevel", "SSE41",
                                       [FeatureSSSE3]>;
 def FeatureSSE42   : SubtargetFeature<"sse42", "X86SSELevel", "SSE42",
                                       "Enable SSE 4.2 instructions",
-                                      [FeatureSSE41, FeaturePOPCNT]>;
+                                      [FeatureSSE41]>;
 def Feature3DNow   : SubtargetFeature<"3dnow", "X863DNowLevel", "ThreeDNow",
                                       "Enable 3DNow! instructions">;
 def Feature3DNowA  : SubtargetFeature<"3dnowa", "X863DNowLevel", "ThreeDNowA",
@@ -66,8 +63,7 @@ def FeatureFastUAMem : SubtargetFeature<"fast-unaligned-mem",
                                         "IsUAMemFast", "true",
                                         "Fast unaligned memory access">;
 def FeatureSSE4A   : SubtargetFeature<"sse4a", "HasSSE4A", "true",
-                                      "Support SSE 4a instructions",
-                                      [FeaturePOPCNT]>;
+                                      "Support SSE 4a instructions">;
 
 def FeatureAVX     : SubtargetFeature<"avx", "HasAVX", "true",
                                       "Enable AVX instructions">;
@@ -180,7 +176,7 @@ include "X86CallingConv.td"
 
 
 //===----------------------------------------------------------------------===//
-// Assembly Parser
+// Assembly Printers
 //===----------------------------------------------------------------------===//
 
 // Currently the X86 assembly parser only supports ATT syntax.
@@ -195,21 +191,15 @@ def ATTAsmParser : AsmParser {
   string RegisterPrefix = "%";
 }
 
-//===----------------------------------------------------------------------===//
-// Assembly Printers
-//===----------------------------------------------------------------------===//
-
 // The X86 target supports two different syntaxes for emitting machine code.
 // This is controlled by the -x86-asm-syntax={att|intel}
 def ATTAsmWriter : AsmWriter {
   string AsmWriterClassName  = "ATTInstPrinter";
   int Variant = 0;
-  bit isMCAsmWriter = 1;
 }
 def IntelAsmWriter : AsmWriter {
   string AsmWriterClassName  = "IntelInstPrinter";
   int Variant = 1;
-  bit isMCAsmWriter = 1;
 }
 
 def X86 : Target {

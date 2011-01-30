@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86AsmPrinter.h"
-#include "InstPrinter/X86ATTInstPrinter.h"
-#include "InstPrinter/X86IntelInstPrinter.h"
+#include "AsmPrinter/X86ATTInstPrinter.h"
+#include "AsmPrinter/X86IntelInstPrinter.h"
 #include "X86MCInstLower.h"
 #include "X86.h"
 #include "X86COFFMachineModuleInfo.h"
@@ -48,6 +48,12 @@ using namespace llvm;
 // Primitive Helper Functions.
 //===----------------------------------------------------------------------===//
 
+void X86AsmPrinter::PrintPICBaseSymbol(raw_ostream &O) const {
+  const TargetLowering *TLI = TM.getTargetLowering();
+  O << *static_cast<const X86TargetLowering*>(TLI)->getPICBaseSymbol(MF,
+                                                                    OutContext);
+}
+
 /// runOnMachineFunction - Emit the function body.
 ///
 bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
@@ -56,7 +62,7 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   if (Subtarget->isTargetCOFF()) {
     bool Intrn = MF.getFunction()->hasInternalLinkage();
     OutStreamer.BeginCOFFSymbolDef(CurrentFnSym);
-    OutStreamer.EmitCOFFSymbolStorageClass(Intrn ? COFF::IMAGE_SYM_CLASS_STATIC
+    OutStreamer.EmitCOFFSymbolStorageClass(Intrn ? COFF::IMAGE_SYM_CLASS_STATIC 
                                               : COFF::IMAGE_SYM_CLASS_EXTERNAL);
     OutStreamer.EmitCOFFSymbolType(COFF::IMAGE_SYM_DTYPE_FUNCTION
                                                << COFF::SCT_COMPLEX_TYPE_SHIFT);
@@ -89,7 +95,7 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
     break;
   case MachineOperand::MO_GlobalAddress: {
     const GlobalValue *GV = MO.getGlobal();
-
+    
     MCSymbol *GVSym;
     if (MO.getTargetFlags() == X86II::MO_DARWIN_STUB)
       GVSym = GetSymbolWithGlobalValueBase(GV, "$stub");
@@ -103,11 +109,11 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
     // Handle dllimport linkage.
     if (MO.getTargetFlags() == X86II::MO_DLLIMPORT)
       GVSym = OutContext.GetOrCreateSymbol(Twine("__imp_") + GVSym->getName());
-
+    
     if (MO.getTargetFlags() == X86II::MO_DARWIN_NONLAZY ||
         MO.getTargetFlags() == X86II::MO_DARWIN_NONLAZY_PIC_BASE) {
       MCSymbol *Sym = GetSymbolWithGlobalValueBase(GV, "$non_lazy_ptr");
-      MachineModuleInfoImpl::StubValueTy &StubSym =
+      MachineModuleInfoImpl::StubValueTy &StubSym = 
         MMI->getObjFileInfo<MachineModuleInfoMachO>().getGVStubEntry(Sym);
       if (StubSym.getPointer() == 0)
         StubSym = MachineModuleInfoImpl::
@@ -127,7 +133,7 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
         StubSym = MachineModuleInfoImpl::
           StubValueTy(Mang->getSymbol(GV), !GV->hasInternalLinkage());
     }
-
+    
     // If the name begins with a dollar-sign, enclose it in parens.  We do this
     // to avoid having it look like an integer immediate to the assembler.
     if (GVSym->getName()[0] != '$')
@@ -143,7 +149,7 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
       SmallString<128> TempNameStr;
       TempNameStr += StringRef(MO.getSymbolName());
       TempNameStr += StringRef("$stub");
-
+      
       MCSymbol *Sym = GetExternalSymbolSymbol(TempNameStr.str());
       MachineModuleInfoImpl::StubValueTy &StubSym =
         MMI->getObjFileInfo<MachineModuleInfoMachO>().getFnStubEntry(Sym);
@@ -157,17 +163,17 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
     } else {
       SymToPrint = GetExternalSymbolSymbol(MO.getSymbolName());
     }
-
+    
     // If the name begins with a dollar-sign, enclose it in parens.  We do this
     // to avoid having it look like an integer immediate to the assembler.
-    if (SymToPrint->getName()[0] != '$')
+    if (SymToPrint->getName()[0] != '$') 
       O << *SymToPrint;
     else
       O << '(' << *SymToPrint << '(';
     break;
   }
   }
-
+  
   switch (MO.getTargetFlags()) {
   default:
     llvm_unreachable("Unknown target flag on GV operand");
@@ -179,12 +185,15 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
     // These affect the name of the symbol, not any suffix.
     break;
   case X86II::MO_GOT_ABSOLUTE_ADDRESS:
-    O << " + [.-" << *MF->getPICBaseSymbol() << ']';
-    break;
+    O << " + [.-";
+    PrintPICBaseSymbol(O);
+    O << ']';
+    break;      
   case X86II::MO_PIC_BASE_OFFSET:
   case X86II::MO_DARWIN_NONLAZY_PIC_BASE:
   case X86II::MO_DARWIN_HIDDEN_NONLAZY_PIC_BASE:
-    O << '-' << *MF->getPICBaseSymbol();
+    O << '-';
+    PrintPICBaseSymbol(O);
     break;
   case X86II::MO_TLSGD:     O << "@TLSGD";     break;
   case X86II::MO_GOTTPOFF:  O << "@GOTTPOFF";  break;
@@ -197,7 +206,8 @@ void X86AsmPrinter::printSymbolOperand(const MachineOperand &MO,
   case X86II::MO_PLT:       O << "@PLT";       break;
   case X86II::MO_TLVP:      O << "@TLVP";      break;
   case X86II::MO_TLVP_PIC_BASE:
-    O << "@TLVP" << '-' << *MF->getPICBaseSymbol();
+    O << "@TLVP" << '-';
+    PrintPICBaseSymbol(O);
     break;
   }
 }
@@ -252,7 +262,7 @@ void X86AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
 
   case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_ConstantPoolIndex:
-  case MachineOperand::MO_GlobalAddress:
+  case MachineOperand::MO_GlobalAddress: 
   case MachineOperand::MO_ExternalSymbol: {
     O << '$';
     printSymbolOperand(MO, O);
@@ -288,10 +298,10 @@ void X86AsmPrinter::printLeaMemReference(const MachineInstr *MI, unsigned Op,
   if (HasBaseReg && Modifier && !strcmp(Modifier, "no-rip") &&
       BaseReg.getReg() == X86::RIP)
     HasBaseReg = false;
-
+  
   // HasParenPart - True if we will print out the () part of the mem ref.
   bool HasParenPart = IndexReg.getReg() || HasBaseReg;
-
+  
   if (DispSpec.isImm()) {
     int DispVal = DispSpec.getImm();
     if (DispVal || !HasParenPart)
@@ -334,8 +344,10 @@ void X86AsmPrinter::printMemReference(const MachineInstr *MI, unsigned Op,
 
 void X86AsmPrinter::printPICLabel(const MachineInstr *MI, unsigned Op,
                                   raw_ostream &O) {
-  O << *MF->getPICBaseSymbol() << '\n';
-  O << *MF->getPICBaseSymbol() << ':';
+  PrintPICBaseSymbol(O);
+  O << '\n';
+  PrintPICBaseSymbol(O);
+  O << ':';
 }
 
 bool X86AsmPrinter::printAsmMRegister(const MachineOperand &MO, char Mode,
@@ -374,14 +386,14 @@ bool X86AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
     if (ExtraCode[1] != 0) return true; // Unknown modifier.
 
     const MachineOperand &MO = MI->getOperand(OpNo);
-
+    
     switch (ExtraCode[0]) {
     default: return true;  // Unknown modifier.
     case 'a': // This is an address.  Currently only 'i' and 'r' are expected.
       if (MO.isImm()) {
         O << MO.getImm();
         return false;
-      }
+      } 
       if (MO.isGlobal() || MO.isCPI() || MO.isJTI() || MO.isSymbol()) {
         printSymbolOperand(MO, O);
         if (Subtarget->isPICStyleRIPRel())
@@ -478,13 +490,13 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     // All darwin targets use mach-o.
     MachineModuleInfoMachO &MMIMacho =
       MMI->getObjFileInfo<MachineModuleInfoMachO>();
-
+    
     // Output stubs for dynamically-linked functions.
     MachineModuleInfoMachO::SymbolListTy Stubs;
 
     Stubs = MMIMacho.GetFnStubList();
     if (!Stubs.empty()) {
-      const MCSection *TheSection =
+      const MCSection *TheSection = 
         OutContext.getMachOSection("__IMPORT", "__jump_table",
                                    MCSectionMachO::S_SYMBOL_STUBS |
                                    MCSectionMachO::S_ATTR_SELF_MODIFYING_CODE |
@@ -502,7 +514,7 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
         const char HltInsts[] = { -12, -12, -12, -12, -12 };
         OutStreamer.EmitBytes(StringRef(HltInsts, 5), 0/*addrspace*/);
       }
-
+      
       Stubs.clear();
       OutStreamer.AddBlankLine();
     }
@@ -510,7 +522,7 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     // Output stubs for external and common global variables.
     Stubs = MMIMacho.GetGVStubList();
     if (!Stubs.empty()) {
-      const MCSection *TheSection =
+      const MCSection *TheSection = 
         OutContext.getMachOSection("__IMPORT", "__pointers",
                                    MCSectionMachO::S_NON_LAZY_SYMBOL_POINTERS,
                                    SectionKind::getMetadata());
@@ -566,13 +578,6 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     // linker can safely perform dead code stripping.  Since LLVM never
     // generates code that does this, it is always safe to set.
     OutStreamer.EmitAssemblerFlag(MCAF_SubsectionsViaSymbols);
-  }
-
-  if (Subtarget->isTargetWindows() && !Subtarget->isTargetCygMing() &&
-      MMI->callsExternalVAFunctionWithFloatingPointArguments()) {
-    StringRef SymbolName = Subtarget->is64Bit() ? "_fltused" : "__fltused";
-    MCSymbol *S = MMI->getContext().GetOrCreateSymbol(SymbolName);
-    OutStreamer.EmitSymbolAttribute(S, MCSA_Global);
   }
 
   if (Subtarget->isTargetCOFF()) {
@@ -656,12 +661,12 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
   }
 }
 
-MachineLocation
+MachineLocation 
 X86AsmPrinter::getDebugValueLocation(const MachineInstr *MI) const {
   MachineLocation Location;
   assert (MI->getNumOperands() == 7 && "Invalid no. of machine operands!");
   // Frame address.  Currently handles register +- offset only.
-
+  
   if (MI->getOperand(0).isReg() && MI->getOperand(3).isImm())
     Location.set(MI->getOperand(0).getReg(), MI->getOperand(3).getImm());
   else {
@@ -685,9 +690,9 @@ void X86AsmPrinter::PrintDebugValueComment(const MachineInstr *MI,
   O << V.getName();
   O << " <- ";
   // Frame address.  Currently handles register +- offset only.
-  O << '[';
+  O << '['; 
   if (MI->getOperand(0).isReg() && MI->getOperand(0).getReg())
-    printOperand(MI, 0, O);
+    printOperand(MI, 0, O); 
   else
     O << "undef";
   O << '+'; printOperand(MI, 3, O);
@@ -713,10 +718,10 @@ static MCInstPrinter *createX86MCInstPrinter(const Target &T,
 }
 
 // Force static initialization.
-extern "C" void LLVMInitializeX86AsmPrinter() {
+extern "C" void LLVMInitializeX86AsmPrinter() { 
   RegisterAsmPrinter<X86AsmPrinter> X(TheX86_32Target);
   RegisterAsmPrinter<X86AsmPrinter> Y(TheX86_64Target);
-
+  
   TargetRegistry::RegisterMCInstPrinter(TheX86_32Target,createX86MCInstPrinter);
   TargetRegistry::RegisterMCInstPrinter(TheX86_64Target,createX86MCInstPrinter);
 }

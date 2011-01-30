@@ -18,10 +18,11 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Signals.h"
+#include "llvm/System/Signals.h"
+#include <iostream>
 #include <algorithm>
+#include <iomanip>
 #include <memory>
 #include <fstream>
 using namespace llvm;
@@ -334,12 +335,12 @@ bool buildPaths(bool checkExistence, std::string* ErrMsg) {
 
 // printSymbolTable - print out the archive's symbol table.
 void printSymbolTable() {
-  outs() << "\nArchive Symbol Table:\n";
+  std::cout << "\nArchive Symbol Table:\n";
   const Archive::SymTabType& symtab = TheArchive->getSymbolTable();
   for (Archive::SymTabType::const_iterator I=symtab.begin(), E=symtab.end();
        I != E; ++I ) {
     unsigned offset = TheArchive->getFirstFileOffset() + I->second;
-    outs() << " " << format("%9u", offset) << "\t" << I->first <<"\n";
+    std::cout << " " << std::setw(9) << offset << "\t" << I->first <<"\n";
   }
 }
 
@@ -364,10 +365,10 @@ bool doPrint(std::string* ErrMsg) {
           continue;
 
         if (Verbose)
-          outs() << "Printing " << I->getPath().str() << "\n";
+          std::cout << "Printing " << I->getPath().str() << "\n";
 
         unsigned len = I->getSize();
-        outs().write(data, len);
+        std::cout.write(data, len);
       } else {
         countDown--;
       }
@@ -381,17 +382,17 @@ bool doPrint(std::string* ErrMsg) {
 void 
 printMode(unsigned mode) {
   if (mode & 004)
-    outs() << "r";
+    std::cout << "r";
   else
-    outs() << "-";
+    std::cout << "-";
   if (mode & 002)
-    outs() << "w";
+    std::cout << "w";
   else
-    outs() << "-";
+    std::cout << "-";
   if (mode & 001)
-    outs() << "x";
+    std::cout << "x";
   else
-    outs() << "-";
+    std::cout << "-";
 }
 
 // doDisplayTable - Implement the 't' operation. This function prints out just
@@ -410,22 +411,22 @@ doDisplayTable(std::string* ErrMsg) {
         // FIXME: Output should be this format:
         // Zrw-r--r--  500/ 500    525 Nov  8 17:42 2004 Makefile
         if (I->isBitcode())
-          outs() << "b";
+          std::cout << "b";
         else if (I->isCompressed())
-          outs() << "Z";
+          std::cout << "Z";
         else
-          outs() << " ";
+          std::cout << " ";
         unsigned mode = I->getMode();
         printMode((mode >> 6) & 007);
         printMode((mode >> 3) & 007);
         printMode(mode & 007);
-        outs() << " " << format("%4u", I->getUser());
-        outs() << "/" << format("%4u", I->getGroup());
-        outs() << " " << format("%8u", I->getSize());
-        outs() << " " << format("%20s", I->getModTime().str().substr(4).c_str());
-        outs() << " " << I->getPath().str() << "\n";
+        std::cout << " " << std::setw(4) << I->getUser();
+        std::cout << "/" << std::setw(4) << I->getGroup();
+        std::cout << " " << std::setw(8) << I->getSize();
+        std::cout << " " << std::setw(20) << I->getModTime().str().substr(4);
+        std::cout << " " << I->getPath().str() << "\n";
       } else {
-        outs() << I->getPath().str() << "\n";
+        std::cout << I->getPath().str() << "\n";
       }
     }
   }

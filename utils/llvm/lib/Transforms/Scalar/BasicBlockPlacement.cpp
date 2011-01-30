@@ -41,9 +41,7 @@ STATISTIC(NumMoved, "Number of basic blocks moved");
 namespace {
   struct BlockPlacement : public FunctionPass {
     static char ID; // Pass identification, replacement for typeid
-    BlockPlacement() : FunctionPass(ID) {
-      initializeBlockPlacementPass(*PassRegistry::getPassRegistry());
-    }
+    BlockPlacement() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F);
 
@@ -76,11 +74,8 @@ namespace {
 }
 
 char BlockPlacement::ID = 0;
-INITIALIZE_PASS_BEGIN(BlockPlacement, "block-placement",
-                "Profile Guided Basic Block Placement", false, false)
-INITIALIZE_AG_DEPENDENCY(ProfileInfo)
-INITIALIZE_PASS_END(BlockPlacement, "block-placement",
-                "Profile Guided Basic Block Placement", false, false)
+INITIALIZE_PASS(BlockPlacement, "block-placement",
+                "Profile Guided Basic Block Placement", false, false);
 
 FunctionPass *llvm::createBlockPlacementPass() { return new BlockPlacement(); }
 

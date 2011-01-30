@@ -1,6 +1,6 @@
-; RUN: bugpoint -load %llvmshlibdir/BugpointPasses%shlibext %s -output-prefix %t -bugpoint-crashcalls -silence-passes > /dev/null
+; RUN: bugpoint -load %llvmlibsdir/BugpointPasses%shlibext %s -output-prefix %t -bugpoint-crashcalls -silence-passes > /dev/null
 ; RUN: llvm-dis %t-reduced-simplified.bc -o - | FileCheck %s
-; REQUIRES: loadable_module
+; XFAIL: mingw
 
 ; Bugpoint should keep the call's metadata attached to the call.
 

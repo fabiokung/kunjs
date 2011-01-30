@@ -10,13 +10,12 @@
 #ifndef LLVM_TARGET_TARGETASMBACKEND_H
 #define LLVM_TARGET_TARGETASMBACKEND_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
 class MCDataFragment;
 class MCFixup;
 class MCInst;
-class MCObjectFormat;
 class MCObjectWriter;
 class MCSection;
 template<typename T>
@@ -29,19 +28,36 @@ class TargetAsmBackend {
   TargetAsmBackend(const TargetAsmBackend &);   // DO NOT IMPLEMENT
   void operator=(const TargetAsmBackend &);  // DO NOT IMPLEMENT
 protected: // Can only create subclasses.
-  TargetAsmBackend();
+  TargetAsmBackend(const Target &);
 
+  /// TheTarget - The Target that this machine was created for.
+  const Target &TheTarget;
+
+  unsigned HasAbsolutizedSet : 1;
   unsigned HasReliableSymbolDifference : 1;
   unsigned HasScatteredSymbols : 1;
 
 public:
   virtual ~TargetAsmBackend();
 
-  virtual const MCObjectFormat &getObjectFormat() const = 0;
+  const Target &getTarget() const { return TheTarget; }
 
   /// createObjectWriter - Create a new MCObjectWriter instance for use by the
   /// assembler backend to emit the final object file.
   virtual MCObjectWriter *createObjectWriter(raw_ostream &OS) const = 0;
+
+  /// hasAbsolutizedSet - Check whether this target "absolutizes"
+  /// assignments. That is, given code like:
+  ///   a:
+  ///   ...
+  ///   b:
+  ///   tmp = a - b
+  ///       .long tmp
+  /// will the value of 'tmp' be a relocatable expression, or the assembly time
+  /// value of L0 - L1. This distinction is only relevant for platforms that
+  /// support scattered symbols, since in the absence of scattered symbols (a -
+  /// b) cannot change after assembly.
+  bool hasAbsolutizedSet() const { return HasAbsolutizedSet; }
 
   /// hasReliableSymbolDifference - Check whether this target implements
   /// accurate relocations for differences between symbols. If not, differences
@@ -52,7 +68,7 @@ public:
   /// This should always be true (since it results in fewer relocations with no
   /// loss of functionality), but is currently supported as a way to maintain
   /// exact object compatibility with Darwin 'as' (on non-x86_64). It should
-  /// eventually should be eliminated.
+  /// eventually should be eliminated. See also \see hasAbsolutizedSet.
   bool hasReliableSymbolDifference() const {
     return HasReliableSymbolDifference;
   }
@@ -81,8 +97,9 @@ public:
     return true;
   }
 
-  /// getPointerSize - Get the pointer size in bytes.
-  virtual unsigned getPointerSize() const = 0;
+  /// isVirtualSection - Check whether the given section is "virtual", that is
+  /// has no actual object file contents.
+  virtual bool isVirtualSection(const MCSection &Section) const = 0;
 
   /// ApplyFixup - Apply the \arg Value for given \arg Fixup into the provided
   /// data fragment, at the offset specified by the fixup and following the

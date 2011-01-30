@@ -1,10 +1,10 @@
 //===- TargetSelectionDAG.td - Common code for DAG isels ---*- tablegen -*-===//
-//
+// 
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
-//
+// 
 //===----------------------------------------------------------------------===//
 //
 // This file defines the target-independent interfaces used by SelectionDAG
@@ -123,10 +123,10 @@ def SDTFPRoundOp  : SDTypeProfile<1, 1, [   // fround
 def SDTFPExtendOp  : SDTypeProfile<1, 1, [  // fextend
   SDTCisFP<0>, SDTCisFP<1>, SDTCisOpSmallerThanOp<1, 0>
 ]>;
-def SDTIntToFPOp : SDTypeProfile<1, 1, [    // [su]int_to_fp
+def SDTIntToFPOp : SDTypeProfile<1, 1, [    // [su]int_to_fp 
   SDTCisFP<0>, SDTCisInt<1>
 ]>;
-def SDTFPToIntOp : SDTypeProfile<1, 1, [    // fp_to_[su]int
+def SDTFPToIntOp : SDTypeProfile<1, 1, [    // fp_to_[su]int 
   SDTCisInt<0>, SDTCisFP<1>
 ]>;
 def SDTExtInreg : SDTypeProfile<1, 2, [     // sext_inreg
@@ -138,7 +138,7 @@ def SDTSetCC : SDTypeProfile<1, 3, [        // setcc
   SDTCisInt<0>, SDTCisSameAs<1, 2>, SDTCisVT<3, OtherVT>
 ]>;
 
-def SDTSelect : SDTypeProfile<1, 3, [       // select
+def SDTSelect : SDTypeProfile<1, 3, [       // select 
   SDTCisInt<1>, SDTCisSameAs<0, 2>, SDTCisSameAs<2, 3>
 ]>;
 
@@ -162,11 +162,11 @@ def SDTBrind : SDTypeProfile<0, 1, [        // brind
 def SDTNone : SDTypeProfile<0, 0, []>;      // ret, trap
 
 def SDTLoad : SDTypeProfile<1, 1, [         // load
-  SDTCisPtrTy<1>
+  SDTCisPtrTy<1>  
 ]>;
 
 def SDTStore : SDTypeProfile<0, 2, [        // store
-  SDTCisPtrTy<1>
+  SDTCisPtrTy<1>  
 ]>;
 
 def SDTIStore : SDTypeProfile<1, 3, [       // indexed store
@@ -183,18 +183,18 @@ def SDTVecInsert : SDTypeProfile<1, 3, [    // vector insert
   SDTCisEltOfVec<2, 1>, SDTCisSameAs<0, 1>, SDTCisPtrTy<3>
 ]>;
 
-def SDTPrefetch : SDTypeProfile<0, 3, [     // prefetch
+def STDPrefetch : SDTypeProfile<0, 3, [     // prefetch
   SDTCisPtrTy<0>, SDTCisSameAs<1, 2>, SDTCisInt<1>
 ]>;
 
-def SDTMemBarrier : SDTypeProfile<0, 5, [   // memory barier
+def STDMemBarrier : SDTypeProfile<0, 5, [   // memory barier
   SDTCisSameAs<0,1>,  SDTCisSameAs<0,2>,  SDTCisSameAs<0,3>, SDTCisSameAs<0,4>,
   SDTCisInt<0>
 ]>;
-def SDTAtomic3 : SDTypeProfile<1, 3, [
+def STDAtomic3 : SDTypeProfile<1, 3, [
   SDTCisSameAs<0,2>,  SDTCisSameAs<0,3>, SDTCisInt<0>, SDTCisPtrTy<1>
 ]>;
-def SDTAtomic2 : SDTypeProfile<1, 2, [
+def STDAtomic2 : SDTypeProfile<1, 2, [
   SDTCisSameAs<0,2>, SDTCisInt<0>, SDTCisPtrTy<1>
 ]>;
 
@@ -224,19 +224,12 @@ def SDNPMayLoad     : SDNodeProperty;   // May read memory, sets 'mayLoad'.
 def SDNPSideEffect  : SDNodeProperty;   // Sets 'HasUnmodelledSideEffects'.
 def SDNPMemOperand  : SDNodeProperty;   // Touches memory, has assoc MemOperand
 def SDNPVariadic    : SDNodeProperty;   // Node has variable arguments.
-def SDNPWantRoot    : SDNodeProperty;   // ComplexPattern gets the root of match
-def SDNPWantParent  : SDNodeProperty;   // ComplexPattern gets the parent
-
-//===----------------------------------------------------------------------===//
-// Selection DAG Pattern Operations
-class SDPatternOperator;
 
 //===----------------------------------------------------------------------===//
 // Selection DAG Node definitions.
 //
 class SDNode<string opcode, SDTypeProfile typeprof,
-             list<SDNodeProperty> props = [], string sdclass = "SDNode">
-             : SDPatternOperator {
+             list<SDNodeProperty> props = [], string sdclass = "SDNode"> {
   string Opcode  = opcode;
   string SDClass = sdclass;
   list<SDNodeProperty> Properties = props;
@@ -319,7 +312,7 @@ def subc       : SDNode<"ISD::SUBC"      , SDTIntBinOp,
                         [SDNPOutFlag]>;
 def sube       : SDNode<"ISD::SUBE"      , SDTIntBinOp,
                         [SDNPOutFlag, SDNPInFlag]>;
-
+                        
 def sext_inreg : SDNode<"ISD::SIGN_EXTEND_INREG", SDTExtInreg>;
 def bswap      : SDNode<"ISD::BSWAP"      , SDTIntUnaryOp>;
 def ctlz       : SDNode<"ISD::CTLZ"       , SDTIntUnaryOp>;
@@ -329,11 +322,11 @@ def sext       : SDNode<"ISD::SIGN_EXTEND", SDTIntExtendOp>;
 def zext       : SDNode<"ISD::ZERO_EXTEND", SDTIntExtendOp>;
 def anyext     : SDNode<"ISD::ANY_EXTEND" , SDTIntExtendOp>;
 def trunc      : SDNode<"ISD::TRUNCATE"   , SDTIntTruncOp>;
-def bitconvert : SDNode<"ISD::BITCAST"    , SDTUnaryOp>;
+def bitconvert : SDNode<"ISD::BIT_CONVERT", SDTUnaryOp>;
 def extractelt : SDNode<"ISD::EXTRACT_VECTOR_ELT", SDTVecExtract>;
 def insertelt  : SDNode<"ISD::INSERT_VECTOR_ELT", SDTVecInsert>;
 
-
+                        
 def fadd       : SDNode<"ISD::FADD"       , SDTFPBinOp, [SDNPCommutative]>;
 def fsub       : SDNode<"ISD::FSUB"       , SDTFPBinOp>;
 def fmul       : SDNode<"ISD::FMUL"       , SDTFPBinOp, [SDNPCommutative]>;
@@ -374,36 +367,35 @@ def br         : SDNode<"ISD::BR"         , SDTBr,     [SDNPHasChain]>;
 def trap       : SDNode<"ISD::TRAP"       , SDTNone,
                         [SDNPHasChain, SDNPSideEffect]>;
 
-def prefetch   : SDNode<"ISD::PREFETCH"   , SDTPrefetch,
-                        [SDNPHasChain, SDNPMayLoad, SDNPMayStore,
-                         SDNPMemOperand]>;
+def prefetch   : SDNode<"ISD::PREFETCH"   , STDPrefetch,
+                        [SDNPHasChain, SDNPMayLoad, SDNPMayStore]>;
 
-def membarrier : SDNode<"ISD::MEMBARRIER" , SDTMemBarrier,
+def membarrier : SDNode<"ISD::MEMBARRIER" , STDMemBarrier,
                         [SDNPHasChain, SDNPSideEffect]>;
 
-def atomic_cmp_swap : SDNode<"ISD::ATOMIC_CMP_SWAP" , SDTAtomic3,
+def atomic_cmp_swap : SDNode<"ISD::ATOMIC_CMP_SWAP" , STDAtomic3,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_add : SDNode<"ISD::ATOMIC_LOAD_ADD" , SDTAtomic2,
+def atomic_load_add : SDNode<"ISD::ATOMIC_LOAD_ADD" , STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_swap     : SDNode<"ISD::ATOMIC_SWAP", SDTAtomic2,
+def atomic_swap     : SDNode<"ISD::ATOMIC_SWAP", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_sub : SDNode<"ISD::ATOMIC_LOAD_SUB" , SDTAtomic2,
+def atomic_load_sub : SDNode<"ISD::ATOMIC_LOAD_SUB" , STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_and : SDNode<"ISD::ATOMIC_LOAD_AND" , SDTAtomic2,
+def atomic_load_and : SDNode<"ISD::ATOMIC_LOAD_AND" , STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_or  : SDNode<"ISD::ATOMIC_LOAD_OR" , SDTAtomic2,
+def atomic_load_or  : SDNode<"ISD::ATOMIC_LOAD_OR" , STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_xor : SDNode<"ISD::ATOMIC_LOAD_XOR" , SDTAtomic2,
+def atomic_load_xor : SDNode<"ISD::ATOMIC_LOAD_XOR" , STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_nand: SDNode<"ISD::ATOMIC_LOAD_NAND", SDTAtomic2,
+def atomic_load_nand: SDNode<"ISD::ATOMIC_LOAD_NAND", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_min : SDNode<"ISD::ATOMIC_LOAD_MIN", SDTAtomic2,
+def atomic_load_min : SDNode<"ISD::ATOMIC_LOAD_MIN", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_max : SDNode<"ISD::ATOMIC_LOAD_MAX", SDTAtomic2,
+def atomic_load_max : SDNode<"ISD::ATOMIC_LOAD_MAX", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_umin : SDNode<"ISD::ATOMIC_LOAD_UMIN", SDTAtomic2,
+def atomic_load_umin : SDNode<"ISD::ATOMIC_LOAD_UMIN", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_umax : SDNode<"ISD::ATOMIC_LOAD_UMAX", SDTAtomic2,
+def atomic_load_umax : SDNode<"ISD::ATOMIC_LOAD_UMAX", STDAtomic2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
 
 // Do not use ld, st directly. Use load, extload, sextload, zextload, store,
@@ -423,16 +415,16 @@ def vector_extract : SDNode<"ISD::EXTRACT_VECTOR_ELT",
     SDTypeProfile<1, 2, [SDTCisPtrTy<2>]>, []>;
 def vector_insert : SDNode<"ISD::INSERT_VECTOR_ELT",
     SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>, SDTCisPtrTy<3>]>, []>;
-
+    
 // Nodes for intrinsics, you should use the intrinsic itself and let tblgen use
 // these internally.  Don't reference these directly.
-def intrinsic_void : SDNode<"ISD::INTRINSIC_VOID",
+def intrinsic_void : SDNode<"ISD::INTRINSIC_VOID", 
                             SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>,
                             [SDNPHasChain]>;
-def intrinsic_w_chain : SDNode<"ISD::INTRINSIC_W_CHAIN",
+def intrinsic_w_chain : SDNode<"ISD::INTRINSIC_W_CHAIN", 
                                SDTypeProfile<1, -1, [SDTCisPtrTy<1>]>,
                                [SDNPHasChain]>;
-def intrinsic_wo_chain : SDNode<"ISD::INTRINSIC_WO_CHAIN",
+def intrinsic_wo_chain : SDNode<"ISD::INTRINSIC_WO_CHAIN", 
                                 SDTypeProfile<1, -1, [SDTCisPtrTy<1>]>, []>;
 
 // Do not use cvt directly. Use cvt forms below
@@ -477,10 +469,10 @@ def NOOP_SDNodeXForm : SDNodeXForm<imm, [{}]>;
 //
 
 /// PatFrag - Represents a pattern fragment.  This can match something on the
-/// DAG, from a single node to multiple nested other fragments.
+/// DAG, frame a single node to multiply nested other fragments.
 ///
 class PatFrag<dag ops, dag frag, code pred = [{}],
-              SDNodeXForm xform = NOOP_SDNodeXForm> : SDPatternOperator {
+              SDNodeXForm xform = NOOP_SDNodeXForm> {
   dag Operands = ops;
   dag Fragment = frag;
   code Predicate = pred;
@@ -830,7 +822,7 @@ def cvtfu : PatFrag<(ops node:$val, node:$dty, node:$sty, node:$rd, node:$sat),
 //===----------------------------------------------------------------------===//
 // Selection DAG Pattern Support.
 //
-// Patterns are what are actually matched against by the target-flavored
+// Patterns are what are actually matched against the target-flavored
 // instruction selection DAG.  Instructions defined by the target implicitly
 // define patterns in most cases, but patterns can also be explicitly added when
 // an operation is defined by a sequence of instructions (e.g. loading a large
@@ -842,7 +834,7 @@ class Pattern<dag patternToMatch, list<dag> resultInstrs> {
   dag             PatternToMatch  = patternToMatch;
   list<dag>       ResultInstrs    = resultInstrs;
   list<Predicate> Predicates      = [];  // See class Instruction in Target.td.
-  int             AddedComplexity = 0;   // See class Instruction in Target.td.
+  int             AddedComplexity = 0;  // See class Instruction in Target.td.
 }
 
 // Pat - A simple (but common) form of a pattern, which produces a simple result

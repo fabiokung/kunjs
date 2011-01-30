@@ -1,4 +1,4 @@
-//===-- X86Subtarget.cpp - X86 Subtarget Information ----------------------===//
+//===-- X86Subtarget.cpp - X86 Subtarget Information ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -18,7 +18,7 @@
 #include "llvm/GlobalValue.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Host.h"
+#include "llvm/System/Host.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/ADT/SmallVector.h"
@@ -289,7 +289,6 @@ X86Subtarget::X86Subtarget(const std::string &TT, const std::string &FS,
   , X863DNowLevel(NoThreeDNow)
   , HasCMov(false)
   , HasX86_64(false)
-  , HasPOPCNT(false)
   , HasSSE4A(false)
   , HasAVX(false)
   , HasAES(false)

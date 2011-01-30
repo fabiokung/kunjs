@@ -65,10 +65,9 @@ public:
   }
 };
 
-} // end anonymous namespace
+}
 
-#define GET_REGISTER_MATCHER
-#include "X86GenAsmMatcher.inc"
+static unsigned MatchRegisterName(StringRef Name);
 
 AsmToken X86AsmLexer::LexTokenATT() {
   AsmToken lexedToken = lexDefinite();
@@ -163,3 +162,7 @@ extern "C" void LLVMInitializeX86AsmLexer() {
   RegisterAsmLexer<X86AsmLexer> X(TheX86_32Target);
   RegisterAsmLexer<X86AsmLexer> Y(TheX86_64Target);
 }
+
+#define REGISTERS_ONLY
+#include "X86GenAsmMatcher.inc"
+#undef REGISTERS_ONLY

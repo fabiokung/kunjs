@@ -121,13 +121,13 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
   }
   if (isa<ConstantPointerNull>(V)) {
     // We know all of the bits for a constant!
-    KnownOne.clearAllBits();
+    KnownOne.clear();
     KnownZero = DemandedMask;
     return 0;
   }
 
-  KnownZero.clearAllBits();
-  KnownOne.clearAllBits();
+  KnownZero.clear();
+  KnownOne.clear();
   if (DemandedMask == 0) {   // Not demanding any bits from V.
     if (isa<UndefValue>(V))
       return 0;
@@ -451,7 +451,7 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
     // If any of the sign extended bits are demanded, we know that the sign
     // bit is demanded.
     if ((NewBits & DemandedMask) != 0)
-      InputDemandedBits.setBit(SrcBitWidth-1);
+      InputDemandedBits.set(SrcBitWidth-1);
       
     InputDemandedBits.trunc(SrcBitWidth);
     KnownZero.trunc(SrcBitWidth);
@@ -634,7 +634,7 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
       // If any of the "high bits" are demanded, we should set the sign bit as
       // demanded.
       if (DemandedMask.countLeadingZeros() <= ShiftAmt)
-        DemandedMaskIn.setBit(BitWidth-1);
+        DemandedMaskIn.set(BitWidth-1);
       if (SimplifyDemandedBits(I->getOperandUse(0), DemandedMaskIn,
                                KnownZero, KnownOne, Depth+1))
         return I;
@@ -793,10 +793,10 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     for (unsigned i = 0; i != VWidth; ++i)
       if (!DemandedElts[i]) {   // If not demanded, set to undef.
         Elts.push_back(Undef);
-        UndefElts.setBit(i);
+        UndefElts.set(i);
       } else if (isa<UndefValue>(CV->getOperand(i))) {   // Already undef.
         Elts.push_back(Undef);
-        UndefElts.setBit(i);
+        UndefElts.set(i);
       } else {                               // Otherwise, defined.
         Elts.push_back(CV->getOperand(i));
       }
@@ -879,13 +879,13 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     // Otherwise, the element inserted overwrites whatever was there, so the
     // input demanded set is simpler than the output set.
     APInt DemandedElts2 = DemandedElts;
-    DemandedElts2.clearBit(IdxNo);
+    DemandedElts2.clear(IdxNo);
     TmpV = SimplifyDemandedVectorElts(I->getOperand(0), DemandedElts2,
                                       UndefElts, Depth+1);
     if (TmpV) { I->setOperand(0, TmpV); MadeChange = true; }
 
     // The inserted element is defined.
-    UndefElts.clearBit(IdxNo);
+    UndefElts.clear(IdxNo);
     break;
   }
   case Instruction::ShuffleVector: {
@@ -900,9 +900,9 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
           assert(MaskVal < LHSVWidth * 2 &&
                  "shufflevector mask index out of range!");
           if (MaskVal < LHSVWidth)
-            LeftDemanded.setBit(MaskVal);
+            LeftDemanded.set(MaskVal);
           else
-            RightDemanded.setBit(MaskVal - LHSVWidth);
+            RightDemanded.set(MaskVal - LHSVWidth);
         }
       }
     }
@@ -921,16 +921,16 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     for (unsigned i = 0; i < VWidth; i++) {
       unsigned MaskVal = Shuffle->getMaskValue(i);
       if (MaskVal == -1u) {
-        UndefElts.setBit(i);
+        UndefElts.set(i);
       } else if (MaskVal < LHSVWidth) {
         if (UndefElts4[MaskVal]) {
           NewUndefElts = true;
-          UndefElts.setBit(i);
+          UndefElts.set(i);
         }
       } else {
         if (UndefElts3[MaskVal - LHSVWidth]) {
           NewUndefElts = true;
-          UndefElts.setBit(i);
+          UndefElts.set(i);
         }
       }
     }
@@ -973,7 +973,7 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
       Ratio = VWidth/InVWidth;
       for (unsigned OutIdx = 0; OutIdx != VWidth; ++OutIdx) {
         if (DemandedElts[OutIdx])
-          InputDemandedElts.setBit(OutIdx/Ratio);
+          InputDemandedElts.set(OutIdx/Ratio);
       }
     } else {
       // Untested so far.
@@ -985,7 +985,7 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
       Ratio = InVWidth/VWidth;
       for (unsigned InIdx = 0; InIdx != InVWidth; ++InIdx)
         if (DemandedElts[InIdx/Ratio])
-          InputDemandedElts.setBit(InIdx);
+          InputDemandedElts.set(InIdx);
     }
     
     // div/rem demand all inputs, because they don't want divide by zero.
@@ -1004,7 +1004,7 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
       // undef.
       for (unsigned OutIdx = 0; OutIdx != VWidth; ++OutIdx)
         if (UndefElts2[OutIdx/Ratio])
-          UndefElts.setBit(OutIdx);
+          UndefElts.set(OutIdx);
     } else if (VWidth < InVWidth) {
       llvm_unreachable("Unimp");
       // If there are more elements in the source than there are in the result,
@@ -1013,7 +1013,7 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
       UndefElts = ~0ULL >> (64-VWidth);  // Start out all undef.
       for (unsigned InIdx = 0; InIdx != InVWidth; ++InIdx)
         if (!UndefElts2[InIdx])            // Not undef?
-          UndefElts.clearBit(InIdx/Ratio);    // Clear undef bit.
+          UndefElts.clear(InIdx/Ratio);    // Clear undef bit.
     }
     break;
   }

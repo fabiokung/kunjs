@@ -34,9 +34,8 @@ namespace {
       (void) llvm::createDeadMachineInstructionElimPass();
 
       (void) llvm::createFastRegisterAllocator();
-      (void) llvm::createBasicRegisterAllocator();
       (void) llvm::createLinearScanRegisterAllocator();
-      (void) llvm::createDefaultPBQPRegisterAllocator();
+      (void) llvm::createPBQPRegisterAllocator();
 
       (void) llvm::createSimpleRegisterCoalescer();
       

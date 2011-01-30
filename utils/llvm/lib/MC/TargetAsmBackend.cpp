@@ -10,8 +10,10 @@
 #include "llvm/Target/TargetAsmBackend.h"
 using namespace llvm;
 
-TargetAsmBackend::TargetAsmBackend()
-  : HasReliableSymbolDifference(false),
+TargetAsmBackend::TargetAsmBackend(const Target &T)
+  : TheTarget(T),
+    HasAbsolutizedSet(false),
+    HasReliableSymbolDifference(false),
     HasScatteredSymbols(false)
 {
 }

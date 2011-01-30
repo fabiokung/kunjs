@@ -9,7 +9,7 @@
 #ifndef EDINSTINFO_H
 #define EDINSTINFO_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
   

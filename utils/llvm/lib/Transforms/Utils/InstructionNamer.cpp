@@ -23,9 +23,7 @@ using namespace llvm;
 namespace {
   struct InstNamer : public FunctionPass {
     static char ID; // Pass identification, replacement for typeid
-    InstNamer() : FunctionPass(ID) {
-      initializeInstNamerPass(*PassRegistry::getPassRegistry());
-    }
+    InstNamer() : FunctionPass(ID) {}
     
     void getAnalysisUsage(AnalysisUsage &Info) const {
       Info.setPreservesAll();
@@ -50,10 +48,11 @@ namespace {
   };
   
   char InstNamer::ID = 0;
+  INITIALIZE_PASS(InstNamer, "instnamer", 
+                  "Assign names to anonymous instructions", false, false);
 }
 
-INITIALIZE_PASS(InstNamer, "instnamer", 
-                "Assign names to anonymous instructions", false, false)
+
 char &llvm::InstructionNamerID = InstNamer::ID;
 //===----------------------------------------------------------------------===//
 //

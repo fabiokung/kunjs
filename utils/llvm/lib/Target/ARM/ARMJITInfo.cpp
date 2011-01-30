@@ -22,7 +22,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Memory.h"
+#include "llvm/System/Memory.h"
 #include <cstdlib>
 using namespace llvm;
 
@@ -290,7 +290,7 @@ void ARMJITInfo::relocate(void *Function, MachineRelocation *MR,
       *((intptr_t*)RelocPos) |= ResultPtr;
       // Set register Rn to PC.
       *((intptr_t*)RelocPos) |=
-        getARMRegisterNumbering(ARM::PC) << ARMII::RegRnShift;
+        ARMRegisterInfo::getRegisterNumbering(ARM::PC) << ARMII::RegRnShift;
       break;
     }
     case ARM::reloc_arm_pic_jt:

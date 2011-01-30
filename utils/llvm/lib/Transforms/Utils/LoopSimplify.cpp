@@ -46,10 +46,9 @@
 #include "llvm/LLVMContext.h"
 #include "llvm/Type.h"
 #include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/Dominators.h"
-#include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/Dominators.h"
+#include "llvm/Analysis/LoopPass.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CFG.h"
@@ -66,9 +65,7 @@ STATISTIC(NumNested  , "Number of nested loops split out");
 namespace {
   struct LoopSimplify : public LoopPass {
     static char ID; // Pass identification, replacement for typeid
-    LoopSimplify() : LoopPass(ID) {
-      initializeLoopSimplifyPass(*PassRegistry::getPassRegistry());
-    }
+    LoopSimplify() : LoopPass(ID) {}
 
     // AA - If we have an alias analysis object to update, this is it, otherwise
     // this is null.
@@ -110,12 +107,8 @@ namespace {
 }
 
 char LoopSimplify::ID = 0;
-INITIALIZE_PASS_BEGIN(LoopSimplify, "loopsimplify",
-                "Canonicalize natural loops", true, false)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_END(LoopSimplify, "loopsimplify",
-                "Canonicalize natural loops", true, false)
+INITIALIZE_PASS(LoopSimplify, "loopsimplify",
+                "Canonicalize natural loops", true, false);
 
 // Publically exposed interface to pass...
 char &llvm::LoopSimplifyID = LoopSimplify::ID;
@@ -269,12 +262,11 @@ ReprocessLoop:
   PHINode *PN;
   for (BasicBlock::iterator I = L->getHeader()->begin();
        (PN = dyn_cast<PHINode>(I++)); )
-    if (Value *V = SimplifyInstruction(PN, 0, DT))
-      if (LI->replacementPreservesLCSSAForm(PN, V)) {
-          if (AA) AA->deleteValue(PN);
-          PN->replaceAllUsesWith(V);
-          PN->eraseFromParent();
-      }
+    if (Value *V = PN->hasConstantValue(DT)) {
+      if (AA) AA->deleteValue(PN);
+      PN->replaceAllUsesWith(V);
+      PN->eraseFromParent();
+    }
 
   // If this loop has multiple exits and the exits all go to the same
   // block, attempt to merge the exits. This helps several passes, such
@@ -446,18 +438,17 @@ static void AddBlockAndPredsToSet(BasicBlock *InputBB, BasicBlock *StopBlock,
 /// FindPHIToPartitionLoops - The first part of loop-nestification is to find a
 /// PHI node that tells us how to partition the loops.
 static PHINode *FindPHIToPartitionLoops(Loop *L, DominatorTree *DT,
-                                        AliasAnalysis *AA, LoopInfo *LI) {
+                                        AliasAnalysis *AA) {
   for (BasicBlock::iterator I = L->getHeader()->begin(); isa<PHINode>(I); ) {
     PHINode *PN = cast<PHINode>(I);
     ++I;
-    if (Value *V = SimplifyInstruction(PN, 0, DT))
-      if (LI->replacementPreservesLCSSAForm(PN, V)) {
-        // This is a degenerate PHI already, don't modify it!
-        PN->replaceAllUsesWith(V);
-        if (AA) AA->deleteValue(PN);
-        PN->eraseFromParent();
-        continue;
-      }
+    if (Value *V = PN->hasConstantValue(DT)) {
+      // This is a degenerate PHI already, don't modify it!
+      PN->replaceAllUsesWith(V);
+      if (AA) AA->deleteValue(PN);
+      PN->eraseFromParent();
+      continue;
+    }
 
     // Scan this PHI node looking for a use of the PHI node by itself.
     for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
@@ -525,7 +516,7 @@ void LoopSimplify::PlaceSplitBlockCarefully(BasicBlock *NewBB,
 /// created.
 ///
 Loop *LoopSimplify::SeparateNestedLoop(Loop *L, LPPassManager &LPM) {
-  PHINode *PN = FindPHIToPartitionLoops(L, DT, AA, LI);
+  PHINode *PN = FindPHIToPartitionLoops(L, DT, AA);
   if (PN == 0) return 0;  // No known way to partition.
 
   // Pull out all predecessors that have varying values in the loop.  This

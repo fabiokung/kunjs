@@ -34,8 +34,8 @@ using namespace llvm;
 STATISTIC(LoadsClustered, "Number of loads clustered together");
 
 ScheduleDAGSDNodes::ScheduleDAGSDNodes(MachineFunction &mf)
-  : ScheduleDAG(mf),
-    InstrItins(mf.getTarget().getInstrItineraryData()) {}
+  : ScheduleDAG(mf) {
+}
 
 /// Run - perform scheduling.
 ///
@@ -72,7 +72,6 @@ SUnit *ScheduleDAGSDNodes::Clone(SUnit *Old) {
   SUnit *SU = NewSUnit(Old->getNode());
   SU->OrigNode = Old->OrigNode;
   SU->Latency = Old->Latency;
-  SU->isCall = Old->isCall;
   SU->isTwoAddress = Old->isTwoAddress;
   SU->isCommutable = Old->isCommutable;
   SU->hasPhysRegDefs = Old->hasPhysRegDefs;
@@ -301,8 +300,6 @@ void ScheduleDAGSDNodes::BuildSchedUnits() {
       N = N->getOperand(N->getNumOperands()-1).getNode();
       assert(N->getNodeId() == -1 && "Node already inserted!");
       N->setNodeId(NodeSUnit->NodeNum);
-      if (N->isMachineOpcode() && TII->get(N->getMachineOpcode()).isCall())
-        NodeSUnit->isCall = true;
     }
     
     // Scan down to find any flagged succs.
@@ -319,8 +316,6 @@ void ScheduleDAGSDNodes::BuildSchedUnits() {
           assert(N->getNodeId() == -1 && "Node already inserted!");
           N->setNodeId(NodeSUnit->NodeNum);
           N = *UI;
-          if (N->isMachineOpcode() && TII->get(N->getMachineOpcode()).isCall())
-            NodeSUnit->isCall = true;
           break;
         }
       if (!HasFlagUse) break;
@@ -434,7 +429,8 @@ void ScheduleDAGSDNodes::ComputeLatency(SUnit *SU) {
     return;
   }
 
-  if (!InstrItins || InstrItins->isEmpty()) {
+  const InstrItineraryData &InstrItins = TM.getInstrItineraryData();
+  if (InstrItins.isEmpty()) {
     SU->Latency = 1;
     return;
   }
@@ -443,8 +439,10 @@ void ScheduleDAGSDNodes::ComputeLatency(SUnit *SU) {
   // all nodes flagged together into this SUnit.
   SU->Latency = 0;
   for (SDNode *N = SU->getNode(); N; N = N->getFlaggedNode())
-    if (N->isMachineOpcode())
-      SU->Latency += TII->getInstrLatency(InstrItins, N);
+    if (N->isMachineOpcode()) {
+      SU->Latency += InstrItins.
+        getStageLatency(TII->get(N->getMachineOpcode()).getSchedClass());
+    }
 }
 
 void ScheduleDAGSDNodes::ComputeOperandLatency(SDNode *Def, SDNode *Use,
@@ -453,25 +451,32 @@ void ScheduleDAGSDNodes::ComputeOperandLatency(SDNode *Def, SDNode *Use,
   if (ForceUnitLatencies())
     return;
 
+  const InstrItineraryData &InstrItins = TM.getInstrItineraryData();
+  if (InstrItins.isEmpty())
+    return;
+  
   if (dep.getKind() != SDep::Data)
     return;
 
   unsigned DefIdx = Use->getOperand(OpIdx).getResNo();
-  if (Use->isMachineOpcode())
-    // Adjust the use operand index by num of defs.
-    OpIdx += TII->get(Use->getMachineOpcode()).getNumDefs();
-  int Latency = TII->getOperandLatency(InstrItins, Def, DefIdx, Use, OpIdx);
-  if (Latency > 1 && Use->getOpcode() == ISD::CopyToReg &&
-      !BB->succ_empty()) {
-    unsigned Reg = cast<RegisterSDNode>(Use->getOperand(1))->getReg();
-    if (TargetRegisterInfo::isVirtualRegister(Reg))
-      // This copy is a liveout value. It is likely coalesced, so reduce the
-      // latency so not to penalize the def.
-      // FIXME: need target specific adjustment here?
-      Latency = (Latency > 1) ? Latency - 1 : 1;
+  if (Def->isMachineOpcode()) {
+    const TargetInstrDesc &II = TII->get(Def->getMachineOpcode());
+    if (DefIdx >= II.getNumDefs())
+      return;
+    int DefCycle = InstrItins.getOperandCycle(II.getSchedClass(), DefIdx);
+    if (DefCycle < 0)
+      return;
+    int UseCycle = 1;
+    if (Use->isMachineOpcode()) {
+      const unsigned UseClass = TII->get(Use->getMachineOpcode()).getSchedClass();
+      UseCycle = InstrItins.getOperandCycle(UseClass, OpIdx);
+    }
+    if (UseCycle >= 0) {
+      int Latency = DefCycle - UseCycle + 1;
+      if (Latency >= 0)
+        dep.setLatency(Latency);
+    }
   }
-  if (Latency >= 0)
-    dep.setLatency(Latency);
 }
 
 void ScheduleDAGSDNodes::dumpNode(const SUnit *SU) const {

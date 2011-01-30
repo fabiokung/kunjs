@@ -50,6 +50,7 @@ namespace SystemZII {
 class SystemZInstrInfo : public TargetInstrInfoImpl {
   const SystemZRegisterInfo RI;
   SystemZTargetMachine &TM;
+  IndexedMap<unsigned> RegSpillOffsets;
 public:
   explicit SystemZInstrInfo(SystemZTargetMachine &TM);
 
@@ -78,6 +79,15 @@ public:
                                     unsigned DestReg, int FrameIdx,
                                     const TargetRegisterClass *RC,
                                     const TargetRegisterInfo *TRI) const;
+
+  virtual bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator MI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
+                                         const TargetRegisterInfo *TRI) const;
+  virtual bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
+                                           MachineBasicBlock::iterator MI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
+                                           const TargetRegisterInfo *TRI) const;
 
   bool ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const;
   virtual bool isUnpredicatedTerminator(const MachineInstr *MI) const;

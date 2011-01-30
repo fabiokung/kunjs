@@ -28,6 +28,7 @@ namespace llvm {
     // EMachine - This field is the target specific value to emit as the
     // e_machine member of the ELF header.
     unsigned short EMachine;
+    TargetMachine &TM;
     bool is64Bit, isLittleEndian;
   public:
 
@@ -61,7 +62,7 @@ namespace llvm {
       ELFDATA2MSB = 2  // Big-endian object file
     };
 
-    explicit TargetELFWriterInfo(bool is64Bit_, bool isLittleEndian_);
+    explicit TargetELFWriterInfo(TargetMachine &tm);
     virtual ~TargetELFWriterInfo();
 
     unsigned short getEMachine() const { return EMachine; }

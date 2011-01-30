@@ -308,12 +308,6 @@ namespace llvm {
                                             bool is8bit, unsigned Opcode) const;
     
     ConstraintType getConstraintType(const std::string &Constraint) const;
-
-    /// Examine constraint string and operand type and determine a weight value.
-    /// The operand object must already have been set up with the operand type.
-    ConstraintWeight getSingleConstraintMatchWeight(
-      AsmOperandInfo &info, const char *constraint) const;
-
     std::pair<unsigned, const TargetRegisterClass*> 
       getRegForInlineAsmConstraint(const std::string &Constraint,
                                    EVT VT) const;
@@ -389,6 +383,7 @@ namespace llvm {
     SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerTRAMPOLINE(SDValue Op, SelectionDAG &DAG) const;

@@ -17,38 +17,39 @@
 
 #define DEBUG_TYPE "gvn"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/BasicBlock.h"
 #include "llvm/Constants.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/GlobalVariable.h"
 #include "llvm/Function.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/Operator.h"
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/Analysis/Dominators.h"
-#include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Analysis/Loads.h"
-#include "llvm/Analysis/MemoryBuiltins.h"
-#include "llvm/Analysis/MemoryDependenceAnalysis.h"
-#include "llvm/Analysis/PHITransAddr.h"
-#include "llvm/Analysis/ValueTracking.h"
-#include "llvm/Target/TargetData.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/Local.h"
-#include "llvm/Transforms/Utils/SSAUpdater.h"
+#include "llvm/Value.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Allocator.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/Dominators.h"
+#include "llvm/Analysis/Loads.h"
+#include "llvm/Analysis/MemoryBuiltins.h"
+#include "llvm/Analysis/MemoryDependenceAnalysis.h"
+#include "llvm/Analysis/PHITransAddr.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Support/IRBuilder.h"
-#include <list>
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetData.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/Utils/SSAUpdater.h"
 using namespace llvm;
 
 STATISTIC(NumGVNInstr,  "Number of instructions deleted");
@@ -60,6 +61,7 @@ STATISTIC(NumPRELoad,   "Number of loads PRE'd");
 static cl::opt<bool> EnablePRE("enable-pre",
                                cl::init(true), cl::Hidden);
 static cl::opt<bool> EnableLoadPRE("enable-load-pre", cl::init(true));
+static cl::opt<bool> EnableFullLoadPRE("enable-full-load-pre", cl::init(false));
 
 //===----------------------------------------------------------------------===//
 //                         ValueTable Class
@@ -138,9 +140,9 @@ namespace {
       }
     }
 
-    /*bool operator!=(const Expression &other) const {
+    bool operator!=(const Expression &other) const {
       return !(*this == other);
-    }*/
+    }
   };
 
   class ValueTable {
@@ -174,6 +176,7 @@ namespace {
       void add(Value *V, uint32_t num);
       void clear();
       void erase(Value *v);
+      unsigned size();
       void setAliasAnalysis(AliasAnalysis* A) { AA = A; }
       AliasAnalysis *getAliasAnalysis() const { return AA; }
       void setMemDep(MemoryDependenceAnalysis* M) { MD = M; }
@@ -661,63 +664,15 @@ namespace {
   public:
     static char ID; // Pass identification, replacement for typeid
     explicit GVN(bool noloads = false)
-        : FunctionPass(ID), NoLoads(noloads), MD(0) {
-      initializeGVNPass(*PassRegistry::getPassRegistry());
-    }
+      : FunctionPass(ID), NoLoads(noloads), MD(0) { }
 
   private:
     bool NoLoads;
     MemoryDependenceAnalysis *MD;
     DominatorTree *DT;
-    const TargetData* TD;
 
     ValueTable VN;
-    
-    /// NumberTable - A mapping from value numers to lists of Value*'s that
-    /// have that value number.  Use lookupNumber to query it.
-    DenseMap<uint32_t, std::pair<Value*, void*> > NumberTable;
-    BumpPtrAllocator TableAllocator;
-    
-    /// insert_table - Push a new Value to the NumberTable onto the list for
-    /// its value number.
-    void insert_table(uint32_t N, Value *V) {
-      std::pair<Value*, void*>& Curr = NumberTable[N];
-      if (!Curr.first) {
-        Curr.first = V;
-        return;
-      }
-      
-      std::pair<Value*, void*>* Node =
-        TableAllocator.Allocate<std::pair<Value*, void*> >();
-      Node->first = V;
-      Node->second = Curr.second;
-      Curr.second = Node;
-    }
-    
-    /// erase_table - Scan the list of values corresponding to a given value
-    /// number, and remove the given value if encountered.
-    void erase_table(uint32_t N, Value *V) {
-      std::pair<Value*, void*>* Prev = 0;
-      std::pair<Value*, void*>* Curr = &NumberTable[N];
-
-      while (Curr->first != V) {
-        Prev = Curr;
-        Curr = static_cast<std::pair<Value*, void*>*>(Curr->second);
-      }
-      
-      if (Prev) {
-        Prev->second = Curr->second;
-      } else {
-        if (!Curr->second) {
-          Curr->first = 0;
-        } else {
-          std::pair<Value*, void*>* Next =
-            static_cast<std::pair<Value*, void*>*>(Curr->second);
-          Curr->first = Next->first;
-          Curr->second = Next->second;
-        }
-      }
-    }
+    DenseMap<BasicBlock*, ValueNumberScope*> localAvail;
 
     // List of critical edges to be split between iterations.
     SmallVector<std::pair<TerminatorInst*, unsigned>, 4> toSplit;
@@ -744,6 +699,7 @@ namespace {
     bool processBlock(BasicBlock *BB);
     void dump(DenseMap<uint32_t, Value*>& d);
     bool iterateOnFunction(Function &F);
+    Value *CollapsePhi(PHINode* p);
     bool performPRE(Function& F);
     Value *lookupNumber(BasicBlock *BB, uint32_t num);
     void cleanupGlobalSets();
@@ -759,11 +715,7 @@ FunctionPass *llvm::createGVNPass(bool NoLoads) {
   return new GVN(NoLoads);
 }
 
-INITIALIZE_PASS_BEGIN(GVN, "gvn", "Global Value Numbering", false, false)
-INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_END(GVN, "gvn", "Global Value Numbering", false, false)
+INITIALIZE_PASS(GVN, "gvn", "Global Value Numbering", false, false);
 
 void GVN::dump(DenseMap<uint32_t, Value*>& d) {
   errs() << "{\n";
@@ -773,6 +725,33 @@ void GVN::dump(DenseMap<uint32_t, Value*>& d) {
       I->second->dump();
   }
   errs() << "}\n";
+}
+
+static bool isSafeReplacement(PHINode* p, Instruction *inst) {
+  if (!isa<PHINode>(inst))
+    return true;
+
+  for (Instruction::use_iterator UI = p->use_begin(), E = p->use_end();
+       UI != E; ++UI)
+    if (PHINode* use_phi = dyn_cast<PHINode>(*UI))
+      if (use_phi->getParent() == inst->getParent())
+        return false;
+
+  return true;
+}
+
+Value *GVN::CollapsePhi(PHINode *PN) {
+  Value *ConstVal = PN->hasConstantValue(DT);
+  if (!ConstVal) return 0;
+
+  Instruction *Inst = dyn_cast<Instruction>(ConstVal);
+  if (!Inst)
+    return ConstVal;
+
+  if (DT->dominates(Inst, PN))
+    if (isSafeReplacement(PN, Inst))
+      return Inst;
+  return 0;
 }
 
 /// IsValueFullyAvailableInBlock - Return true if we can prove that the value
@@ -958,6 +937,47 @@ static Value *CoerceAvailableValueToLoadType(Value *StoredVal,
   return new BitCastInst(StoredVal, LoadedTy, "bitcast", InsertPt);
 }
 
+/// GetBaseWithConstantOffset - Analyze the specified pointer to see if it can
+/// be expressed as a base pointer plus a constant offset.  Return the base and
+/// offset to the caller.
+static Value *GetBaseWithConstantOffset(Value *Ptr, int64_t &Offset,
+                                        const TargetData &TD) {
+  Operator *PtrOp = dyn_cast<Operator>(Ptr);
+  if (PtrOp == 0) return Ptr;
+  
+  // Just look through bitcasts.
+  if (PtrOp->getOpcode() == Instruction::BitCast)
+    return GetBaseWithConstantOffset(PtrOp->getOperand(0), Offset, TD);
+  
+  // If this is a GEP with constant indices, we can look through it.
+  GEPOperator *GEP = dyn_cast<GEPOperator>(PtrOp);
+  if (GEP == 0 || !GEP->hasAllConstantIndices()) return Ptr;
+  
+  gep_type_iterator GTI = gep_type_begin(GEP);
+  for (User::op_iterator I = GEP->idx_begin(), E = GEP->idx_end(); I != E;
+       ++I, ++GTI) {
+    ConstantInt *OpC = cast<ConstantInt>(*I);
+    if (OpC->isZero()) continue;
+    
+    // Handle a struct and array indices which add their offset to the pointer.
+    if (const StructType *STy = dyn_cast<StructType>(*GTI)) {
+      Offset += TD.getStructLayout(STy)->getElementOffset(OpC->getZExtValue());
+    } else {
+      uint64_t Size = TD.getTypeAllocSize(GTI.getIndexedType());
+      Offset += OpC->getSExtValue()*Size;
+    }
+  }
+  
+  // Re-sign extend from the pointer size if needed to get overflow edge cases
+  // right.
+  unsigned PtrSize = TD.getPointerSizeInBits();
+  if (PtrSize < 64)
+    Offset = (Offset << (64-PtrSize)) >> (64-PtrSize);
+  
+  return GetBaseWithConstantOffset(GEP->getPointerOperand(), Offset, TD);
+}
+
+
 /// AnalyzeLoadFromClobberingWrite - This function is called when we have a
 /// memdep query of a load that ends up being a clobbering memory write (store,
 /// memset, memcpy, memmove).  This means that the write *may* provide bits used
@@ -976,8 +996,9 @@ static int AnalyzeLoadFromClobberingWrite(const Type *LoadTy, Value *LoadPtr,
     return -1;
   
   int64_t StoreOffset = 0, LoadOffset = 0;
-  Value *StoreBase = GetPointerBaseWithConstantOffset(WritePtr, StoreOffset,TD);
-  Value *LoadBase = GetPointerBaseWithConstantOffset(LoadPtr, LoadOffset, TD);
+  Value *StoreBase = GetBaseWithConstantOffset(WritePtr, StoreOffset, TD);
+  Value *LoadBase = 
+    GetBaseWithConstantOffset(LoadPtr, LoadOffset, TD);
   if (StoreBase != LoadBase)
     return -1;
   
@@ -999,6 +1020,8 @@ static int AnalyzeLoadFromClobberingWrite(const Type *LoadTy, Value *LoadPtr,
   // If the load and store don't overlap at all, the store doesn't provide
   // anything to the load.  In this case, they really don't alias at all, AA
   // must have gotten confused.
+  // FIXME: Investigate cases where this bails out, e.g. rdar://7238614. Then
+  // remove this check, as it is duplicated with what we have below.
   uint64_t LoadSize = TD.getTypeSizeInBits(LoadTy);
   
   if ((WriteSizeInBits & 7) | (LoadSize & 7))
@@ -1044,12 +1067,12 @@ static int AnalyzeLoadFromClobberingStore(const Type *LoadTy, Value *LoadPtr,
                                           StoreInst *DepSI,
                                           const TargetData &TD) {
   // Cannot handle reading from store of first-class aggregate yet.
-  if (DepSI->getValueOperand()->getType()->isStructTy() ||
-      DepSI->getValueOperand()->getType()->isArrayTy())
+  if (DepSI->getOperand(0)->getType()->isStructTy() ||
+      DepSI->getOperand(0)->getType()->isArrayTy())
     return -1;
 
   Value *StorePtr = DepSI->getPointerOperand();
-  uint64_t StoreSize =TD.getTypeSizeInBits(DepSI->getValueOperand()->getType());
+  uint64_t StoreSize = TD.getTypeSizeInBits(DepSI->getOperand(0)->getType());
   return AnalyzeLoadFromClobberingWrite(LoadTy, LoadPtr,
                                         StorePtr, StoreSize, TD);
 }
@@ -1324,8 +1347,8 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
                               SmallVectorImpl<Instruction*> &toErase) {
   // Find the non-local dependencies of the load.
   SmallVector<NonLocalDepResult, 64> Deps;
-  AliasAnalysis::Location Loc = VN.getAliasAnalysis()->getLocation(LI);
-  MD->getNonLocalPointerDependency(Loc, true, LI->getParent(), Deps);
+  MD->getNonLocalPointerDependency(LI->getOperand(0), true, LI->getParent(),
+                                   Deps);
   //DEBUG(dbgs() << "INVESTIGATING NONLOCAL LOAD: "
   //             << Deps.size() << *LI << '\n');
 
@@ -1353,6 +1376,8 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
   SmallVector<AvailableValueInBlock, 16> ValuesPerBlock;
   SmallVector<BasicBlock*, 16> UnavailableBlocks;
 
+  const TargetData *TD = 0;
+  
   for (unsigned i = 0, e = Deps.size(); i != e; ++i) {
     BasicBlock *DepBB = Deps[i].getBB();
     MemDepResult DepInfo = Deps[i].getResult();
@@ -1367,12 +1392,14 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
       // read by the load, we can extract the bits we need for the load from the
       // stored value.
       if (StoreInst *DepSI = dyn_cast<StoreInst>(DepInfo.getInst())) {
+        if (TD == 0)
+          TD = getAnalysisIfAvailable<TargetData>();
         if (TD && Address) {
           int Offset = AnalyzeLoadFromClobberingStore(LI->getType(), Address,
                                                       DepSI, *TD);
           if (Offset != -1) {
             ValuesPerBlock.push_back(AvailableValueInBlock::get(DepBB,
-                                                       DepSI->getValueOperand(),
+                                                           DepSI->getOperand(0),
                                                                 Offset));
             continue;
           }
@@ -1382,6 +1409,8 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
       // If the clobbering value is a memset/memcpy/memmove, see if we can
       // forward a value on from it.
       if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(DepInfo.getInst())) {
+        if (TD == 0)
+          TD = getAnalysisIfAvailable<TargetData>();
         if (TD && Address) {
           int Offset = AnalyzeLoadFromClobberingMemInst(LI->getType(), Address,
                                                         DepMI, *TD);
@@ -1411,10 +1440,13 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
     if (StoreInst *S = dyn_cast<StoreInst>(DepInst)) {
       // Reject loads and stores that are to the same address but are of
       // different types if we have to.
-      if (S->getValueOperand()->getType() != LI->getType()) {
+      if (S->getOperand(0)->getType() != LI->getType()) {
+        if (TD == 0)
+          TD = getAnalysisIfAvailable<TargetData>();
+        
         // If the stored value is larger or equal to the loaded value, we can
         // reuse it.
-        if (TD == 0 || !CanCoerceMustAliasedValueToLoad(S->getValueOperand(),
+        if (TD == 0 || !CanCoerceMustAliasedValueToLoad(S->getOperand(0),
                                                         LI->getType(), *TD)) {
           UnavailableBlocks.push_back(DepBB);
           continue;
@@ -1422,13 +1454,16 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
       }
 
       ValuesPerBlock.push_back(AvailableValueInBlock::get(DepBB,
-                                                         S->getValueOperand()));
+                                                          S->getOperand(0)));
       continue;
     }
     
     if (LoadInst *LD = dyn_cast<LoadInst>(DepInst)) {
       // If the types mismatch and we can't handle it, reject reuse of the load.
       if (LD->getType() != LI->getType()) {
+        if (TD == 0)
+          TD = getAnalysisIfAvailable<TargetData>();
+        
         // If the stored value is larger or equal to the loaded value, we can
         // reuse it.
         if (TD == 0 || !CanCoerceMustAliasedValueToLoad(LD, LI->getType(),*TD)){
@@ -1498,18 +1533,25 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
       return false;
     if (Blockers.count(TmpBB))
       return false;
-    
-    // If any of these blocks has more than one successor (i.e. if the edge we
-    // just traversed was critical), then there are other paths through this 
-    // block along which the load may not be anticipated.  Hoisting the load 
-    // above this block would be adding the load to execution paths along
-    // which it was not previously executed.
     if (TmpBB->getTerminator()->getNumSuccessors() != 1)
-      return false;
+      allSingleSucc = false;
   }
 
   assert(TmpBB);
   LoadBB = TmpBB;
+
+  // If we have a repl set with LI itself in it, this means we have a loop where
+  // at least one of the values is LI.  Since this means that we won't be able
+  // to eliminate LI even if we insert uses in the other predecessors, we will
+  // end up increasing code size.  Reject this by scanning for LI.
+  for (unsigned i = 0, e = ValuesPerBlock.size(); i != e; ++i) {
+    if (ValuesPerBlock[i].isSimpleValue() &&
+        ValuesPerBlock[i].getSimpleValue() == LI) {
+      // Skip cases where LI is the only definition, even for EnableFullLoadPRE.
+      if (!EnableFullLoadPRE || e == 1)
+        return false;
+    }
+  }
 
   // FIXME: It is extremely unclear what this loop is doing, other than
   // artificially restricting loadpre.
@@ -1570,13 +1612,14 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
   unsigned NumUnavailablePreds = PredLoads.size();
   assert(NumUnavailablePreds != 0 &&
          "Fully available value should be eliminated above!");
-  
-  // If this load is unavailable in multiple predecessors, reject it.
-  // FIXME: If we could restructure the CFG, we could make a common pred with
-  // all the preds that don't have an available LI and insert a new load into
-  // that one block.
-  if (NumUnavailablePreds != 1)
+  if (!EnableFullLoadPRE) {
+    // If this load is unavailable in multiple predecessors, reject it.
+    // FIXME: If we could restructure the CFG, we could make a common pred with
+    // all the preds that don't have an available LI and insert a new load into
+    // that one block.
+    if (NumUnavailablePreds != 1)
       return false;
+  }
 
   // Check if the load can safely be moved to all the unavailable predecessors.
   bool CanDoPRE = true;
@@ -1591,7 +1634,7 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
     // If all preds have a single successor, then we know it is safe to insert
     // the load on the pred (?!?), so we can insert code to materialize the
     // pointer if it is not available.
-    PHITransAddr Address(LI->getPointerOperand(), TD);
+    PHITransAddr Address(LI->getOperand(0), TD);
     Value *LoadPtr = 0;
     if (allSingleSucc) {
       LoadPtr = Address.PHITranslateWithInsertion(LoadBB, UnavailablePred,
@@ -1605,7 +1648,7 @@ bool GVN::processNonLocalLoad(LoadInst *LI,
     // we fail PRE.
     if (LoadPtr == 0) {
       DEBUG(dbgs() << "COULDN'T INSERT PHI TRANSLATED VALUE OF: "
-            << *LI->getPointerOperand() << "\n");
+            << *LI->getOperand(0) << "\n");
       CanDoPRE = false;
       break;
     }
@@ -1710,19 +1753,19 @@ bool GVN::processLoad(LoadInst *L, SmallVectorImpl<Instruction*> &toErase) {
     // access code.
     Value *AvailVal = 0;
     if (StoreInst *DepSI = dyn_cast<StoreInst>(Dep.getInst()))
-      if (TD) {
+      if (const TargetData *TD = getAnalysisIfAvailable<TargetData>()) {
         int Offset = AnalyzeLoadFromClobberingStore(L->getType(),
                                                     L->getPointerOperand(),
                                                     DepSI, *TD);
         if (Offset != -1)
-          AvailVal = GetStoreValueForLoad(DepSI->getValueOperand(), Offset,
+          AvailVal = GetStoreValueForLoad(DepSI->getOperand(0), Offset,
                                           L->getType(), L, *TD);
       }
     
     // If the clobbering value is a memset/memcpy/memmove, see if we can forward
     // a value on from it.
     if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(Dep.getInst())) {
-      if (TD) {
+      if (const TargetData *TD = getAnalysisIfAvailable<TargetData>()) {
         int Offset = AnalyzeLoadFromClobberingMemInst(L->getType(),
                                                       L->getPointerOperand(),
                                                       DepMI, *TD);
@@ -1761,13 +1804,14 @@ bool GVN::processLoad(LoadInst *L, SmallVectorImpl<Instruction*> &toErase) {
 
   Instruction *DepInst = Dep.getInst();
   if (StoreInst *DepSI = dyn_cast<StoreInst>(DepInst)) {
-    Value *StoredVal = DepSI->getValueOperand();
+    Value *StoredVal = DepSI->getOperand(0);
     
     // The store and load are to a must-aliased pointer, but they may not
     // actually have the same type.  See if we know how to reuse the stored
     // value (depending on its type).
+    const TargetData *TD = 0;
     if (StoredVal->getType() != L->getType()) {
-      if (TD) {
+      if ((TD = getAnalysisIfAvailable<TargetData>())) {
         StoredVal = CoerceAvailableValueToLoadType(StoredVal, L->getType(),
                                                    L, *TD);
         if (StoredVal == 0)
@@ -1796,8 +1840,9 @@ bool GVN::processLoad(LoadInst *L, SmallVectorImpl<Instruction*> &toErase) {
     // The loads are of a must-aliased pointer, but they may not actually have
     // the same type.  See if we know how to reuse the previously loaded value
     // (depending on its type).
+    const TargetData *TD = 0;
     if (DepLI->getType() != L->getType()) {
-      if (TD) {
+      if ((TD = getAnalysisIfAvailable<TargetData>())) {
         AvailableVal = CoerceAvailableValueToLoadType(DepLI, L->getType(), L,*TD);
         if (AvailableVal == 0)
           return false;
@@ -1845,31 +1890,17 @@ bool GVN::processLoad(LoadInst *L, SmallVectorImpl<Instruction*> &toErase) {
   return false;
 }
 
-// lookupNumber - In order to find a leader for a given value number at a 
-// specific basic block, we first obtain the list of all Values for that number,
-// and then scan the list to find one whose block dominates the block in 
-// question.  This is fast because dominator tree queries consist of only
-// a few comparisons of DFS numbers.
 Value *GVN::lookupNumber(BasicBlock *BB, uint32_t num) {
-  std::pair<Value*, void*> Vals = NumberTable[num];
-  if (!Vals.first) return 0;
-  Instruction *Inst = dyn_cast<Instruction>(Vals.first);
-  if (!Inst) return Vals.first;
-  BasicBlock *Parent = Inst->getParent();
-  if (DT->dominates(Parent, BB))
-    return Inst;
-  
-  std::pair<Value*, void*>* Next =
-    static_cast<std::pair<Value*, void*>*>(Vals.second);
-  while (Next) {
-    Instruction *CurrInst = dyn_cast<Instruction>(Next->first);
-    if (!CurrInst) return Next->first;
-    
-    BasicBlock *Parent = CurrInst->getParent();
-    if (DT->dominates(Parent, BB))
-      return CurrInst;
-    
-    Next = static_cast<std::pair<Value*, void*>*>(Next->second);
+  DenseMap<BasicBlock*, ValueNumberScope*>::iterator I = localAvail.find(BB);
+  if (I == localAvail.end())
+    return 0;
+
+  ValueNumberScope *Locals = I->second;
+  while (Locals) {
+    DenseMap<uint32_t, Value*>::iterator I = Locals->table.find(num);
+    if (I != Locals->table.end())
+      return I->second;
+    Locals = Locals->parent;
   }
 
   return 0;
@@ -1884,25 +1915,12 @@ bool GVN::processInstruction(Instruction *I,
   if (isa<DbgInfoIntrinsic>(I))
     return false;
 
-  // If the instruction can be easily simplified then do so now in preference
-  // to value numbering it.  Value numbering often exposes redundancies, for
-  // example if it determines that %y is equal to %x then the instruction
-  // "%z = and i32 %x, %y" becomes "%z = and i32 %x, %x" which we now simplify.
-  if (Value *V = SimplifyInstruction(I, TD, DT)) {
-    I->replaceAllUsesWith(V);
-    if (MD && V->getType()->isPointerTy())
-      MD->invalidateCachedPointerInfo(V);
-    VN.erase(I);
-    toErase.push_back(I);
-    return true;
-  }
-
   if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
     bool Changed = processLoad(LI, toErase);
 
     if (!Changed) {
       unsigned Num = VN.lookup_or_add(LI);
-      insert_table(Num, LI);
+      localAvail[I->getParent()]->table.insert(std::make_pair(Num, LI));
     }
 
     return Changed;
@@ -1911,21 +1929,54 @@ bool GVN::processInstruction(Instruction *I,
   uint32_t NextNum = VN.getNextUnusedValueNumber();
   unsigned Num = VN.lookup_or_add(I);
 
+  if (BranchInst *BI = dyn_cast<BranchInst>(I)) {
+    localAvail[I->getParent()]->table.insert(std::make_pair(Num, I));
+
+    if (!BI->isConditional() || isa<Constant>(BI->getCondition()))
+      return false;
+
+    Value *BranchCond = BI->getCondition();
+    uint32_t CondVN = VN.lookup_or_add(BranchCond);
+
+    BasicBlock *TrueSucc = BI->getSuccessor(0);
+    BasicBlock *FalseSucc = BI->getSuccessor(1);
+
+    if (TrueSucc->getSinglePredecessor())
+      localAvail[TrueSucc]->table[CondVN] =
+        ConstantInt::getTrue(TrueSucc->getContext());
+    if (FalseSucc->getSinglePredecessor())
+      localAvail[FalseSucc]->table[CondVN] =
+        ConstantInt::getFalse(TrueSucc->getContext());
+
+    return false;
+
   // Allocations are always uniquely numbered, so we can save time and memory
   // by fast failing them.
-  if (isa<AllocaInst>(I) || isa<TerminatorInst>(I)) {
-    insert_table(Num, I);
+  } else if (isa<AllocaInst>(I) || isa<TerminatorInst>(I)) {
+    localAvail[I->getParent()]->table.insert(std::make_pair(Num, I));
     return false;
   }
 
-  if (isa<PHINode>(I)) {
-    insert_table(Num, I);
-  
+  // Collapse PHI nodes
+  if (PHINode* p = dyn_cast<PHINode>(I)) {
+    Value *constVal = CollapsePhi(p);
+
+    if (constVal) {
+      p->replaceAllUsesWith(constVal);
+      if (MD && constVal->getType()->isPointerTy())
+        MD->invalidateCachedPointerInfo(constVal);
+      VN.erase(p);
+
+      toErase.push_back(p);
+    } else {
+      localAvail[I->getParent()]->table.insert(std::make_pair(Num, I));
+    }
+
   // If the number we were assigned was a brand new VN, then we don't
   // need to do a lookup to see if the number already exists
   // somewhere in the domtree: it can't!
   } else if (Num == NextNum) {
-    insert_table(Num, I);
+    localAvail[I->getParent()]->table.insert(std::make_pair(Num, I));
 
   // Perform fast-path value-number based elimination of values inherited from
   // dominators.
@@ -1939,7 +1990,7 @@ bool GVN::processInstruction(Instruction *I,
     return true;
 
   } else {
-    insert_table(Num, I);
+    localAvail[I->getParent()]->table.insert(std::make_pair(Num, I));
   }
 
   return false;
@@ -1950,7 +2001,6 @@ bool GVN::runOnFunction(Function& F) {
   if (!NoLoads)
     MD = &getAnalysis<MemoryDependenceAnalysis>();
   DT = &getAnalysis<DominatorTree>();
-  TD = getAnalysisIfAvailable<TargetData>();
   VN.setAliasAnalysis(&getAnalysis<AliasAnalysis>());
   VN.setMemDep(MD);
   VN.setDomTree(DT);
@@ -2088,19 +2138,20 @@ bool GVN::performPRE(Function &F) {
         if (P == CurrentBlock) {
           NumWithout = 2;
           break;
-        } else if (!DT->dominates(&F.getEntryBlock(), P))  {
+        } else if (!localAvail.count(P))  {
           NumWithout = 2;
           break;
         }
 
-        Value* predV = lookupNumber(P, ValNo);
-        if (predV == 0) {
+        DenseMap<uint32_t, Value*>::iterator predV =
+                                            localAvail[P]->table.find(ValNo);
+        if (predV == localAvail[P]->table.end()) {
           PREPred = P;
           ++NumWithout;
-        } else if (predV == CurInst) {
+        } else if (predV->second == CurInst) {
           NumWithout = 2;
         } else {
-          predMap[P] = predV;
+          predMap[P] = predV->second;
           ++NumWith;
         }
       }
@@ -2159,7 +2210,7 @@ bool GVN::performPRE(Function &F) {
       ++NumGVNPRE;
 
       // Update the availability map to include the new instruction.
-      insert_table(ValNo, PREInstr);
+      localAvail[PREPred]->table.insert(std::make_pair(ValNo, PREInstr));
 
       // Create a PHI to make the value available in this block.
       PHINode* Phi = PHINode::Create(CurInst->getType(),
@@ -2172,13 +2223,12 @@ bool GVN::performPRE(Function &F) {
       }
 
       VN.add(Phi, ValNo);
-      insert_table(ValNo, Phi);
+      localAvail[CurrentBlock]->table[ValNo] = Phi;
 
       CurInst->replaceAllUsesWith(Phi);
       if (MD && Phi->getType()->isPointerTy())
         MD->invalidateCachedPointerInfo(Phi);
       VN.erase(CurInst);
-      erase_table(ValNo, CurInst);
 
       DEBUG(dbgs() << "GVN PRE removed: " << *CurInst << '\n');
       if (MD) MD->removeInstruction(CurInst);
@@ -2210,7 +2260,16 @@ bool GVN::splitCriticalEdges() {
 /// iterateOnFunction - Executes one iteration of GVN
 bool GVN::iterateOnFunction(Function &F) {
   cleanupGlobalSets();
-  
+
+  for (df_iterator<DomTreeNode*> DI = df_begin(DT->getRootNode()),
+       DE = df_end(DT->getRootNode()); DI != DE; ++DI) {
+    if (DI->getIDom())
+      localAvail[DI->getBlock()] =
+                   new ValueNumberScope(localAvail[DI->getIDom()->getBlock()]);
+    else
+      localAvail[DI->getBlock()] = new ValueNumberScope(0);
+  }
+
   // Top-down walk of the dominator tree
   bool Changed = false;
 #if 0
@@ -2230,8 +2289,11 @@ bool GVN::iterateOnFunction(Function &F) {
 
 void GVN::cleanupGlobalSets() {
   VN.clear();
-  NumberTable.clear();
-  TableAllocator.Reset();
+
+  for (DenseMap<BasicBlock*, ValueNumberScope*>::iterator
+       I = localAvail.begin(), E = localAvail.end(); I != E; ++I)
+    delete I->second;
+  localAvail.clear();
 }
 
 /// verifyRemoved - Verify that the specified instruction does not occur in our
@@ -2241,14 +2303,17 @@ void GVN::verifyRemoved(const Instruction *Inst) const {
 
   // Walk through the value number scope to make sure the instruction isn't
   // ferreted away in it.
-  for (DenseMap<uint32_t, std::pair<Value*, void*> >::const_iterator
-       I = NumberTable.begin(), E = NumberTable.end(); I != E; ++I) {
-    std::pair<Value*, void*> const * Node = &I->second;
-    assert(Node->first != Inst && "Inst still in value numbering scope!");
-    
-    while (Node->second) {
-      Node = static_cast<std::pair<Value*, void*>*>(Node->second);
-      assert(Node->first != Inst && "Inst still in value numbering scope!");
+  for (DenseMap<BasicBlock*, ValueNumberScope*>::const_iterator
+         I = localAvail.begin(), E = localAvail.end(); I != E; ++I) {
+    const ValueNumberScope *VNS = I->second;
+
+    while (VNS) {
+      for (DenseMap<uint32_t, Value*>::const_iterator
+             II = VNS->table.begin(), IE = VNS->table.end(); II != IE; ++II) {
+        assert(II->second != Inst && "Inst still in value numbering scope!");
+      }
+
+      VNS = VNS->parent;
     }
   }
 }

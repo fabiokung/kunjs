@@ -30,7 +30,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Support/FEnv.h"
 #include <cerrno>
 #include <cmath>
 using namespace llvm;
@@ -538,7 +537,7 @@ static Constant *CastGEPIndices(Constant *const *Ops, unsigned NumOps,
   for (unsigned i = 1; i != NumOps; ++i) {
     if ((i == 1 ||
          !isa<StructType>(GetElementPtrInst::getIndexedType(Ops[0]->getType(),
-                                        reinterpret_cast<Value *const *>(Ops+1),
+                                                            reinterpret_cast<Value *const *>(Ops+1),
                                                             i-1))) &&
         Ops[i]->getType() != IntPtrTy) {
       Any = true;
@@ -639,19 +638,12 @@ static Constant *SymbolicallyEvaluateGEP(Constant *const *Ops, unsigned NumOps,
         
       // Determine which element of the array the offset points into.
       APInt ElemSize(BitWidth, TD->getTypeAllocSize(ATy->getElementType()));
-      const IntegerType *IntPtrTy = TD->getIntPtrType(Ty->getContext());
       if (ElemSize == 0)
-        // The element size is 0. This may be [0 x Ty]*, so just use a zero
-        // index for this level and proceed to the next level to see if it can
-        // accommodate the offset.
-        NewIdxs.push_back(ConstantInt::get(IntPtrTy, 0));
-      else {
-        // The element size is non-zero divide the offset by the element
-        // size (rounding down), to compute the index at this level.
-        APInt NewIdx = Offset.udiv(ElemSize);
-        Offset -= NewIdx * ElemSize;
-        NewIdxs.push_back(ConstantInt::get(IntPtrTy, NewIdx));
-      }
+        return 0;
+      APInt NewIdx = Offset.udiv(ElemSize);
+      Offset -= NewIdx * ElemSize;
+      NewIdxs.push_back(ConstantInt::get(TD->getIntPtrType(Ty->getContext()),
+                                         NewIdx));
       Ty = ATy->getElementType();
     } else if (const StructType *STy = dyn_cast<StructType>(Ty)) {
       // Determine which field of the struct the offset points into. The
@@ -695,34 +687,27 @@ static Constant *SymbolicallyEvaluateGEP(Constant *const *Ops, unsigned NumOps,
 // Constant Folding public APIs
 //===----------------------------------------------------------------------===//
 
-/// ConstantFoldInstruction - Try to constant fold the specified instruction.
-/// If successful, the constant result is returned, if not, null is returned.
-/// Note that this fails if not all of the operands are constant.  Otherwise,
-/// this function can only fail when attempting to fold instructions like loads
-/// and stores, which have no constant expression form.
+
+/// ConstantFoldInstruction - Attempt to constant fold the specified
+/// instruction.  If successful, the constant result is returned, if not, null
+/// is returned.  Note that this function can only fail when attempting to fold
+/// instructions like loads and stores, which have no constant expression form.
+///
 Constant *llvm::ConstantFoldInstruction(Instruction *I, const TargetData *TD) {
-  // Handle PHI nodes quickly here...
   if (PHINode *PN = dyn_cast<PHINode>(I)) {
-    Constant *CommonValue = 0;
+    if (PN->getNumIncomingValues() == 0)
+      return UndefValue::get(PN->getType());
 
-    for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i) {
-      Value *Incoming = PN->getIncomingValue(i);
-      // If the incoming value is undef then skip it.  Note that while we could
-      // skip the value if it is equal to the phi node itself we choose not to
-      // because that would break the rule that constant folding only applies if
-      // all operands are constants.
-      if (isa<UndefValue>(Incoming))
-        continue;
-      // If the incoming value is not a constant, or is a different constant to
-      // the one we saw previously, then give up.
-      Constant *C = dyn_cast<Constant>(Incoming);
-      if (!C || (CommonValue && C != CommonValue))
-        return 0;
-      CommonValue = C;
-    }
+    Constant *Result = dyn_cast<Constant>(PN->getIncomingValue(0));
+    if (Result == 0) return 0;
 
-    // If we reach here, all incoming values are the same constant or undef.
-    return CommonValue ? CommonValue : UndefValue::get(PN->getType());
+    // Handle PHI nodes specially here...
+    for (unsigned i = 1, e = PN->getNumIncomingValues(); i != e; ++i)
+      if (PN->getIncomingValue(i) != Result && PN->getIncomingValue(i) != PN)
+        return 0;   // Not all the same incoming constants...
+
+    // If we reach here, all incoming values are the same constant.
+    return Result;
   }
 
   // Scan the operand list, checking to see if they are all constants, if so,
@@ -740,18 +725,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const TargetData *TD) {
   
   if (const LoadInst *LI = dyn_cast<LoadInst>(I))
     return ConstantFoldLoadInst(LI, TD);
-
-  if (InsertValueInst *IVI = dyn_cast<InsertValueInst>(I))
-    return ConstantExpr::getInsertValue(
-                                cast<Constant>(IVI->getAggregateOperand()),
-                                cast<Constant>(IVI->getInsertedValueOperand()),
-                                IVI->idx_begin(), IVI->getNumIndices());
-
-  if (ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(I))
-    return ConstantExpr::getExtractValue(
-                                    cast<Constant>(EVI->getAggregateOperand()),
-                                    EVI->idx_begin(), EVI->getNumIndices());
-
+  
   return ConstantFoldInstOperands(I->getOpcode(), I->getType(),
                                   Ops.data(), Ops.size(), TD);
 }
@@ -762,8 +736,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const TargetData *TD) {
 Constant *llvm::ConstantFoldConstantExpression(const ConstantExpr *CE,
                                                const TargetData *TD) {
   SmallVector<Constant*, 8> Ops;
-  for (User::const_op_iterator i = CE->op_begin(), e = CE->op_end();
-       i != e; ++i) {
+  for (User::const_op_iterator i = CE->op_begin(), e = CE->op_end(); i != e; ++i) {
     Constant *NewC = cast<Constant>(*i);
     // Recursively fold the ConstantExpr's operands.
     if (ConstantExpr *NewCE = dyn_cast<ConstantExpr>(NewC))
@@ -1027,7 +1000,6 @@ llvm::canConstantFoldCallTo(const Function *F) {
   case Intrinsic::usub_with_overflow:
   case Intrinsic::sadd_with_overflow:
   case Intrinsic::ssub_with_overflow:
-  case Intrinsic::smul_with_overflow:
   case Intrinsic::convert_from_fp16:
   case Intrinsic::convert_to_fp16:
     return true;
@@ -1067,10 +1039,10 @@ llvm::canConstantFoldCallTo(const Function *F) {
 
 static Constant *ConstantFoldFP(double (*NativeFP)(double), double V, 
                                 const Type *Ty) {
-  sys::llvm_fenv_clearexcept();
+  errno = 0;
   V = NativeFP(V);
-  if (sys::llvm_fenv_testexcept()) {
-    sys::llvm_fenv_clearexcept();
+  if (errno != 0) {
+    errno = 0;
     return 0;
   }
   
@@ -1084,10 +1056,10 @@ static Constant *ConstantFoldFP(double (*NativeFP)(double), double V,
 
 static Constant *ConstantFoldBinaryFP(double (*NativeFP)(double, double),
                                       double V, double W, const Type *Ty) {
-  sys::llvm_fenv_clearexcept();
+  errno = 0;
   V = NativeFP(V, W);
-  if (sys::llvm_fenv_testexcept()) {
-    sys::llvm_fenv_clearexcept();
+  if (errno != 0) {
+    errno = 0;
     return 0;
   }
   
@@ -1121,13 +1093,6 @@ llvm::ConstantFoldCall(Function *F,
 
       if (!Ty->isFloatTy() && !Ty->isDoubleTy())
         return 0;
-
-      /// We only fold functions with finite arguments. Folding NaN and inf is
-      /// likely to be aborted with an exception anyway, and some host libms
-      /// have known errors raising exceptions.
-      if (Op->getValueAPF().isNaN() || Op->getValueAPF().isInfinity())
-        return 0;
-
       /// Currently APFloat versions of these functions do not exist, so we use
       /// the host native double versions.  Float versions are not called
       /// directly but for all these it is true (float)(f((double)arg)) ==
@@ -1275,35 +1240,40 @@ llvm::ConstantFoldCall(Function *F,
       if (ConstantInt *Op2 = dyn_cast<ConstantInt>(Operands[1])) {
         switch (F->getIntrinsicID()) {
         default: break;
-        case Intrinsic::sadd_with_overflow:
-        case Intrinsic::uadd_with_overflow:
-        case Intrinsic::ssub_with_overflow:
-        case Intrinsic::usub_with_overflow:
-        case Intrinsic::smul_with_overflow: {
-          APInt Res;
-          bool Overflow;
-          switch (F->getIntrinsicID()) {
-          default: assert(0 && "Invalid case");
-          case Intrinsic::sadd_with_overflow:
-            Res = Op1->getValue().sadd_ov(Op2->getValue(), Overflow);
-            break;
-          case Intrinsic::uadd_with_overflow:
-            Res = Op1->getValue().uadd_ov(Op2->getValue(), Overflow);
-            break;
-          case Intrinsic::ssub_with_overflow:
-            Res = Op1->getValue().ssub_ov(Op2->getValue(), Overflow);
-            break;
-          case Intrinsic::usub_with_overflow:
-            Res = Op1->getValue().usub_ov(Op2->getValue(), Overflow);
-            break;
-          case Intrinsic::smul_with_overflow:
-            Res = Op1->getValue().smul_ov(Op2->getValue(), Overflow);
-            break;
-          }
+        case Intrinsic::uadd_with_overflow: {
+          Constant *Res = ConstantExpr::getAdd(Op1, Op2);           // result.
           Constant *Ops[] = {
-            ConstantInt::get(F->getContext(), Res),
-            ConstantInt::get(Type::getInt1Ty(F->getContext()), Overflow)
+            Res, ConstantExpr::getICmp(CmpInst::ICMP_ULT, Res, Op1) // overflow.
           };
+          return ConstantStruct::get(F->getContext(), Ops, 2, false);
+        }
+        case Intrinsic::usub_with_overflow: {
+          Constant *Res = ConstantExpr::getSub(Op1, Op2);           // result.
+          Constant *Ops[] = {
+            Res, ConstantExpr::getICmp(CmpInst::ICMP_UGT, Res, Op1) // overflow.
+          };
+          return ConstantStruct::get(F->getContext(), Ops, 2, false);
+        }
+        case Intrinsic::sadd_with_overflow: {
+          Constant *Res = ConstantExpr::getAdd(Op1, Op2);           // result.
+          Constant *Overflow = ConstantExpr::getSelect(
+              ConstantExpr::getICmp(CmpInst::ICMP_SGT,
+                ConstantInt::get(Op1->getType(), 0), Op1),
+              ConstantExpr::getICmp(CmpInst::ICMP_SGT, Res, Op2), 
+              ConstantExpr::getICmp(CmpInst::ICMP_SLT, Res, Op2)); // overflow.
+
+          Constant *Ops[] = { Res, Overflow };
+          return ConstantStruct::get(F->getContext(), Ops, 2, false);
+        }
+        case Intrinsic::ssub_with_overflow: {
+          Constant *Res = ConstantExpr::getSub(Op1, Op2);           // result.
+          Constant *Overflow = ConstantExpr::getSelect(
+              ConstantExpr::getICmp(CmpInst::ICMP_SGT,
+                ConstantInt::get(Op2->getType(), 0), Op2),
+              ConstantExpr::getICmp(CmpInst::ICMP_SLT, Res, Op1), 
+              ConstantExpr::getICmp(CmpInst::ICMP_SGT, Res, Op1)); // overflow.
+
+          Constant *Ops[] = { Res, Overflow };
           return ConstantStruct::get(F->getContext(), Ops, 2, false);
         }
         }

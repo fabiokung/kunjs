@@ -1,4 +1,4 @@
-; RUN: llc < %s -mtriple=thumbv7-apple-darwin -O3 -relocation-model=pic | FileCheck %s
+; RUN: llc < %s -mtriple=thumbv7-apple-darwin -O3 -relocation-model=pic -mcpu=cortex-a8 | FileCheck %s
 ; rdar://8115404
 ; Tail merging must not split an IT block.
 
@@ -39,7 +39,7 @@ entry:
 ; CHECK: ittt eq
 ; CHECK: moveq r0
 ; CHECK-NOT: LBB0_
-; CHECK: popeq
+; CHECK: ldreq
 ; CHECK: popeq
   switch i32 undef, label %bb7 [
     i32 37, label %bb43

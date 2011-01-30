@@ -15,8 +15,9 @@
 #define LLVM_SUPPORT_MEMORYBUFFER_H
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include <string>
+#include <sys/stat.h>
 
 namespace llvm {
 
@@ -60,26 +61,23 @@ public:
   /// MemoryBuffer if successful, otherwise returning null.  If FileSize is
   /// specified, this means that the client knows that the file exists and that
   /// it has the specified size.
-  static MemoryBuffer *getFile(StringRef Filename, std::string *ErrStr = 0,
-                               int64_t FileSize = -1);
-  static MemoryBuffer *getFile(const char *Filename, std::string *ErrStr = 0,
-                               int64_t FileSize = -1);
+  static MemoryBuffer *getFile(StringRef Filename,
+                               std::string *ErrStr = 0,
+                               int64_t FileSize = -1,
+                               struct stat *FileInfo = 0);
+  static MemoryBuffer *getFile(const char *Filename,
+                               std::string *ErrStr = 0,
+                               int64_t FileSize = -1,
+                               struct stat *FileInfo = 0);
 
-  /// getOpenFile - Given an already-open file descriptor, read the file and
-  /// return a MemoryBuffer.  This takes ownership of the descriptor,
-  /// immediately closing it after reading the file.
-  static MemoryBuffer *getOpenFile(int FD, const char *Filename,
-                                   std::string *ErrStr = 0,
-                                   int64_t FileSize = -1);
-  
   /// getMemBuffer - Open the specified memory range as a MemoryBuffer.  Note
-  /// that InputData must be null terminated.
+  /// that EndPtr[0] must be a null byte and be accessible!
   static MemoryBuffer *getMemBuffer(StringRef InputData,
                                     StringRef BufferName = "");
 
   /// getMemBufferCopy - Open the specified memory range as a MemoryBuffer,
-  /// copying the contents and taking ownership of it.  InputData does not
-  /// have to be null terminated.
+  /// copying the contents and taking ownership of it.  This has no requirements
+  /// on EndPtr[0].
   static MemoryBuffer *getMemBufferCopy(StringRef InputData,
                                         StringRef BufferName = "");
 
@@ -106,10 +104,12 @@ public:
   /// in *ErrStr with a reason.
   static MemoryBuffer *getFileOrSTDIN(StringRef Filename,
                                       std::string *ErrStr = 0,
-                                      int64_t FileSize = -1);
+                                      int64_t FileSize = -1,
+                                      struct stat *FileInfo = 0);
   static MemoryBuffer *getFileOrSTDIN(const char *Filename,
                                       std::string *ErrStr = 0,
-                                      int64_t FileSize = -1);
+                                      int64_t FileSize = -1,
+                                      struct stat *FileInfo = 0);
 };
 
 } // end namespace llvm

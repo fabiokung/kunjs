@@ -14,15 +14,14 @@
 #ifndef BLACKFINTARGETMACHINE_H
 #define BLACKFINTARGETMACHINE_H
 
-#include "BlackfinInstrInfo.h"
-#include "BlackfinIntrinsicInfo.h"
-#include "BlackfinISelLowering.h"
-#include "BlackfinFrameInfo.h"
-#include "BlackfinSubtarget.h"
-#include "BlackfinSelectionDAGInfo.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetFrameInfo.h"
+#include "BlackfinInstrInfo.h"
+#include "BlackfinSubtarget.h"
+#include "BlackfinISelLowering.h"
+#include "BlackfinSelectionDAGInfo.h"
+#include "BlackfinIntrinsicInfo.h"
 
 namespace llvm {
 
@@ -32,7 +31,7 @@ namespace llvm {
     BlackfinTargetLowering TLInfo;
     BlackfinSelectionDAGInfo TSInfo;
     BlackfinInstrInfo InstrInfo;
-    BlackfinFrameInfo FrameInfo;
+    TargetFrameInfo FrameInfo;
     BlackfinIntrinsicInfo IntrinsicInfo;
   public:
     BlackfinTargetMachine(const Target &T, const std::string &TT,

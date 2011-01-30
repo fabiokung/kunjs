@@ -49,12 +49,12 @@ struct AlignOf {
 
 };
 
-/// alignOf - A templated function that returns the mininum alignment of
+/// alignof - A templated function that returns the mininum alignment of
 ///  of a type.  This provides no extra functionality beyond the AlignOf
 ///  class besides some cosmetic cleanliness.  Example usage:
-///  alignOf<int>() returns the alignment of an int.
+///  alignof<int>() returns the alignment of an int.
 template <typename T>
-static inline unsigned alignOf() { return AlignOf<T>::Alignment; }
+static inline unsigned alignof() { return AlignOf<T>::Alignment; }
 
 } // end namespace llvm
 #endif

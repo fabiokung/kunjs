@@ -1,4 +1,4 @@
-// RUN: %llvmgcc -S %s -o - | grep noalias
+// RUN: %llvmgcc -c -emit-llvm %s -o - | llvm-dis | grep noalias
 
 void foo(int * __restrict myptr1, int * myptr2) {
   myptr1[0] = 0;

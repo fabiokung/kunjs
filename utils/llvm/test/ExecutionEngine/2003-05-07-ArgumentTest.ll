@@ -1,4 +1,4 @@
-; RUN: lli %s test
+; RUN: llvm-as < %s | lli - test
 
 declare i32 @puts(i8*)
 

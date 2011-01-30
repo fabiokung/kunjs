@@ -22,16 +22,10 @@ namespace llvm {
 }
 
 char LiveValues::ID = 0;
-INITIALIZE_PASS_BEGIN(LiveValues, "live-values",
-                "Value Liveness Analysis", false, true)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_END(LiveValues, "live-values",
-                "Value Liveness Analysis", false, true)
+INITIALIZE_PASS(LiveValues, "live-values",
+                "Value Liveness Analysis", false, true);
 
-LiveValues::LiveValues() : FunctionPass(ID) {
-  initializeLiveValuesPass(*PassRegistry::getPassRegistry());
-}
+LiveValues::LiveValues() : FunctionPass(ID) {}
 
 void LiveValues::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<DominatorTree>();

@@ -28,42 +28,25 @@ LLVMContext& llvm::getGlobalContext() {
 }
 
 LLVMContext::LLVMContext() : pImpl(new LLVMContextImpl(*this)) {
-  // Create the fixed metadata kinds. This is done in the same order as the
-  // MD_* enum values so that they correspond.
-
-  // Create the 'dbg' metadata kind. 
+  // Create the first metadata kind, which is always 'dbg'.
   unsigned DbgID = getMDKindID("dbg");
   assert(DbgID == MD_dbg && "dbg kind id drifted"); (void)DbgID;
-
-  // Create the 'tbaa' metadata kind.
-  unsigned TBAAID = getMDKindID("tbaa");
-  assert(TBAAID == MD_tbaa && "tbaa kind id drifted"); (void)TBAAID;
 }
 LLVMContext::~LLVMContext() { delete pImpl; }
-
-void LLVMContext::addModule(Module *M) {
-  pImpl->OwnedModules.insert(M);
-}
-
-void LLVMContext::removeModule(Module *M) {
-  pImpl->OwnedModules.erase(M);
-}
 
 //===----------------------------------------------------------------------===//
 // Recoverable Backend Errors
 //===----------------------------------------------------------------------===//
 
-void LLVMContext::
-setInlineAsmDiagnosticHandler(InlineAsmDiagHandlerTy DiagHandler, 
-                              void *DiagContext) {
+void LLVMContext::setInlineAsmDiagnosticHandler(void *DiagHandler, 
+                                                void *DiagContext) {
   pImpl->InlineAsmDiagHandler = DiagHandler;
   pImpl->InlineAsmDiagContext = DiagContext;
 }
 
 /// getInlineAsmDiagnosticHandler - Return the diagnostic handler set by
 /// setInlineAsmDiagnosticHandler.
-LLVMContext::InlineAsmDiagHandlerTy
-LLVMContext::getInlineAsmDiagnosticHandler() const {
+void *LLVMContext::getInlineAsmDiagnosticHandler() const {
   return pImpl->InlineAsmDiagHandler;
 }
 
@@ -97,7 +80,8 @@ void LLVMContext::emitError(unsigned LocCookie, StringRef ErrorStr) {
   // If we do have an error handler, we can report the error and keep going.
   SMDiagnostic Diag("", "error: " + ErrorStr.str());
   
-  pImpl->InlineAsmDiagHandler(Diag, pImpl->InlineAsmDiagContext, LocCookie);
+  ((SourceMgr::DiagHandlerTy)(intptr_t)pImpl->InlineAsmDiagHandler)
+      (Diag, pImpl->InlineAsmDiagContext, LocCookie);
   
 }
 

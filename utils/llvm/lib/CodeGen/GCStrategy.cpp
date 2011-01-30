@@ -123,11 +123,6 @@ GCFunctionInfo *GCStrategy::insertFunctionInfo(const Function &F) {
 
 // -----------------------------------------------------------------------------
 
-INITIALIZE_PASS_BEGIN(LowerIntrinsics, "gc-lowering", "GC Lowering",
-                      false, false)
-INITIALIZE_PASS_DEPENDENCY(GCModuleInfo)
-INITIALIZE_PASS_END(LowerIntrinsics, "gc-lowering", "GC Lowering", false, false)
-
 FunctionPass *llvm::createGCLoweringPass() {
   return new LowerIntrinsics();
 }
@@ -135,9 +130,7 @@ FunctionPass *llvm::createGCLoweringPass() {
 char LowerIntrinsics::ID = 0;
 
 LowerIntrinsics::LowerIntrinsics()
-  : FunctionPass(ID) {
-    initializeLowerIntrinsicsPass(*PassRegistry::getPassRegistry());
-  }
+  : FunctionPass(ID) {}
 
 const char *LowerIntrinsics::getPassName() const {
   return "Lower Garbage Collection Instructions";
@@ -352,15 +345,13 @@ void MachineCodeAnalysis::VisitCallPoint(MachineBasicBlock::iterator CI) {
   MachineBasicBlock::iterator RAI = CI; 
   ++RAI;                                
   
-  if (FI->getStrategy().needsSafePoint(GC::PreCall)) {
-    MCSymbol* Label = InsertLabel(*CI->getParent(), CI, CI->getDebugLoc());
-    FI->addSafePoint(GC::PreCall, Label, CI->getDebugLoc());
-  }
+  if (FI->getStrategy().needsSafePoint(GC::PreCall))
+    FI->addSafePoint(GC::PreCall, InsertLabel(*CI->getParent(), CI,
+                                              CI->getDebugLoc()));
   
-  if (FI->getStrategy().needsSafePoint(GC::PostCall)) {
-    MCSymbol* Label = InsertLabel(*CI->getParent(), RAI, CI->getDebugLoc());
-    FI->addSafePoint(GC::PostCall, Label, CI->getDebugLoc());
-  }
+  if (FI->getStrategy().needsSafePoint(GC::PostCall))
+    FI->addSafePoint(GC::PostCall, InsertLabel(*CI->getParent(), RAI,
+                                               CI->getDebugLoc()));
 }
 
 void MachineCodeAnalysis::FindSafePoints(MachineFunction &MF) {
@@ -373,12 +364,12 @@ void MachineCodeAnalysis::FindSafePoints(MachineFunction &MF) {
 }
 
 void MachineCodeAnalysis::FindStackOffsets(MachineFunction &MF) {
-  const TargetFrameInfo *TFI = TM->getFrameInfo();
-  assert(TFI && "TargetRegisterInfo not available!");
+  const TargetRegisterInfo *TRI = TM->getRegisterInfo();
+  assert(TRI && "TargetRegisterInfo not available!");
   
   for (GCFunctionInfo::roots_iterator RI = FI->roots_begin(),
                                       RE = FI->roots_end(); RI != RE; ++RI)
-    RI->StackOffset = TFI->getFrameIndexOffset(MF, RI->Num);
+    RI->StackOffset = TRI->getFrameIndexOffset(MF, RI->Num);
 }
 
 bool MachineCodeAnalysis::runOnMachineFunction(MachineFunction &MF) {

@@ -202,9 +202,7 @@ namespace llvm {
   public:
     static char ID;
 
-    RenderMachineFunction() : MachineFunctionPass(ID) {
-      initializeRenderMachineFunctionPass(*PassRegistry::getPassRegistry());
-    }
+    RenderMachineFunction() : MachineFunctionPass(ID) {}
 
     virtual void getAnalysisUsage(AnalysisUsage &au) const;
 

@@ -38,9 +38,7 @@ VerifyLoopInfoX("verify-loop-info", cl::location(VerifyLoopInfo),
                 cl::desc("Verify loop info (time consuming)"));
 
 char LoopInfo::ID = 0;
-INITIALIZE_PASS_BEGIN(LoopInfo, "loops", "Natural Loop Information", true, true)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_END(LoopInfo, "loops", "Natural Loop Information", true, true)
+INITIALIZE_PASS(LoopInfo, "loops", "Natural Loop Information", true, true);
 
 //===----------------------------------------------------------------------===//
 // Loop implementation
@@ -50,18 +48,15 @@ INITIALIZE_PASS_END(LoopInfo, "loops", "Natural Loop Information", true, true)
 ///
 bool Loop::isLoopInvariant(Value *V) const {
   if (Instruction *I = dyn_cast<Instruction>(V))
-    return !contains(I);
+    return isLoopInvariant(I);
   return true;  // All non-instructions are loop invariant
 }
 
-/// hasLoopInvariantOperands - Return true if all the operands of the
-/// specified instruction are loop invariant. 
-bool Loop::hasLoopInvariantOperands(Instruction *I) const {
-  for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
-    if (!isLoopInvariant(I->getOperand(i)))
-      return false;
-  
-  return true;
+/// isLoopInvariant - Return true if the specified instruction is
+/// loop-invariant.
+///
+bool Loop::isLoopInvariant(Instruction *I) const {
+  return !contains(I);
 }
 
 /// makeLoopInvariant - If the given value is an instruciton inside of the
@@ -110,7 +105,6 @@ bool Loop::makeLoopInvariant(Instruction *I, bool &Changed,
   for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
     if (!makeLoopInvariant(I->getOperand(i), Changed, InsertPt))
       return false;
-  
   // Hoist.
   I->moveBefore(InsertPt);
   Changed = true;
@@ -198,7 +192,7 @@ Value *Loop::getTripCount() const {
 
 /// getSmallConstantTripCount - Returns the trip count of this loop as a
 /// normal unsigned value, if possible. Returns 0 if the trip count is unknown
-/// or not constant. Will also return 0 if the trip count is very large
+/// of not constant. Will also return 0 if the trip count is very large
 /// (>= 2^32)
 unsigned Loop::getSmallConstantTripCount() const {
   Value* TripCount = this->getTripCount();

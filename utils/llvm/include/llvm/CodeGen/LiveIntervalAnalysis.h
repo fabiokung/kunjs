@@ -68,9 +68,7 @@ namespace llvm {
 
   public:
     static char ID; // Pass identification, replacement for typeid
-    LiveIntervals() : MachineFunctionPass(ID) {
-      initializeLiveIntervalsPass(*PassRegistry::getPassRegistry());
-    }
+    LiveIntervals() : MachineFunctionPass(ID) {}
 
     // Calculate the spill weight to assign to a single instruction.
     static float getSpillWeight(bool isDef, bool isUse, unsigned loopDepth);
@@ -229,6 +227,10 @@ namespace llvm {
       return indexes_->getMBBFromIndex(index);
     }
 
+    SlotIndex getMBBTerminatorGap(const MachineBasicBlock *mbb) {
+      return indexes_->getTerminatorGap(mbb);
+    }
+
     SlotIndex InsertMachineInstrInMaps(MachineInstr *MI) {
       return indexes_->insertMachineInstrInMaps(MI);
     }
@@ -270,7 +272,7 @@ namespace llvm {
     /// (if any is created) by reference. This is temporary.
     std::vector<LiveInterval*>
     addIntervalsForSpills(const LiveInterval& i,
-                          const SmallVectorImpl<LiveInterval*> &SpillIs,
+                          SmallVectorImpl<LiveInterval*> &SpillIs,
                           const MachineLoopInfo *loopInfo, VirtRegMap& vrm);
 
     /// spillPhysRegAroundRegDefsUses - Spill the specified physical register
@@ -283,7 +285,7 @@ namespace llvm {
     /// val# of the specified interval is re-materializable. Also returns true
     /// by reference if all of the defs are load instructions.
     bool isReMaterializable(const LiveInterval &li,
-                            const SmallVectorImpl<LiveInterval*> &SpillIs,
+                            SmallVectorImpl<LiveInterval*> &SpillIs,
                             bool &isLoad);
 
     /// isReMaterializable - Returns true if the definition MI of the specified
@@ -360,7 +362,7 @@ namespace llvm {
     /// by reference if the def is a load.
     bool isReMaterializable(const LiveInterval &li, const VNInfo *ValNo,
                             MachineInstr *MI,
-                            const SmallVectorImpl<LiveInterval*> &SpillIs,
+                            SmallVectorImpl<LiveInterval*> &SpillIs,
                             bool &isLoad);
 
     /// tryFoldMemoryOperand - Attempts to fold either a spill / restore from

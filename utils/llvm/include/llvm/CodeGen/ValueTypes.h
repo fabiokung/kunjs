@@ -18,7 +18,7 @@
 
 #include <cassert>
 #include <string>
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include "llvm/Support/MathExtras.h"
 
 namespace llvm {
@@ -26,10 +26,7 @@ namespace llvm {
   class LLVMContext;
   struct EVT;
 
-  /// MVT - Machine Value Type.  Every type that is supported natively by some
-  /// processor targeted by LLVM occurs here.  This means that any legal value
-  /// type can be represented by a MVT.
-  class MVT {
+  class MVT { // MVT = Machine Value Type
   public:
     enum SimpleValueType {
       // If you change this numbering, you must change the values in
@@ -77,16 +74,14 @@ namespace llvm {
       FIRST_VECTOR_VALUETYPE = v2i8,
       LAST_VECTOR_VALUETYPE  = v4f64,
 
-      x86mmx         =  33,   // This is an X86 MMX value
+      Flag           =  33,   // This glues nodes together during pre-RA sched
 
-      Flag           =  34,   // This glues nodes together during pre-RA sched
+      isVoid         =  34,   // This has no value
 
-      isVoid         =  35,   // This has no value
-
-      LAST_VALUETYPE =  36,   // This always remains at the end of the list.
+      LAST_VALUETYPE =  35,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
-      // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
+      // EVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
       // This value must be a multiple of 32.
       MAX_ALLOWED_VALUETYPE = 64,
 
@@ -129,14 +124,13 @@ namespace llvm {
 
     MVT() : SimpleTy((SimpleValueType)(INVALID_SIMPLE_VALUE_TYPE)) {}
     MVT(SimpleValueType SVT) : SimpleTy(SVT) { }
-
+    
     bool operator>(const MVT& S)  const { return SimpleTy >  S.SimpleTy; }
     bool operator<(const MVT& S)  const { return SimpleTy <  S.SimpleTy; }
     bool operator==(const MVT& S) const { return SimpleTy == S.SimpleTy; }
-    bool operator!=(const MVT& S) const { return SimpleTy != S.SimpleTy; }
     bool operator>=(const MVT& S) const { return SimpleTy >= S.SimpleTy; }
     bool operator<=(const MVT& S) const { return SimpleTy <= S.SimpleTy; }
-
+    
     /// isFloatingPoint - Return true if this is a FP, or a vector FP type.
     bool isFloatingPoint() const {
       return ((SimpleTy >= MVT::f32 && SimpleTy <= MVT::ppcf128) ||
@@ -155,14 +149,14 @@ namespace llvm {
       return (SimpleTy >= MVT::FIRST_VECTOR_VALUETYPE &&
               SimpleTy <= MVT::LAST_VECTOR_VALUETYPE);
     }
-
+    
     /// isPow2VectorType - Returns true if the given vector is a power of 2.
     bool isPow2VectorType() const {
       unsigned NElts = getVectorNumElements();
       return !(NElts & (NElts - 1));
     }
 
-    /// getPow2VectorType - Widens the length of the given vector MVT up to
+    /// getPow2VectorType - Widens the length of the given vector EVT up to
     /// the nearest power of 2 and returns that type.
     MVT getPow2VectorType() const {
       if (isPow2VectorType())
@@ -178,7 +172,7 @@ namespace llvm {
     MVT getScalarType() const {
       return isVector() ? getVectorElementType() : *this;
     }
-
+    
     MVT getVectorElementType() const {
       switch (SimpleTy) {
       default:
@@ -206,7 +200,7 @@ namespace llvm {
       case v4f64: return f64;
       }
     }
-
+    
     unsigned getVectorNumElements() const {
       switch (SimpleTy) {
       default:
@@ -234,7 +228,7 @@ namespace llvm {
       case v1i64: return 1;
       }
     }
-
+    
     unsigned getSizeInBits() const {
       switch (SimpleTy) {
       case iPTR:
@@ -253,7 +247,6 @@ namespace llvm {
       case i32 :
       case v4i8:
       case v2i16: return 32;
-      case x86mmx:
       case f64 :
       case i64 :
       case v8i8:
@@ -280,19 +273,7 @@ namespace llvm {
       case v8i64: return 512;
       }
     }
-
-    /// getStoreSize - Return the number of bytes overwritten by a store
-    /// of the specified value type.
-    unsigned getStoreSize() const {
-      return (getSizeInBits() + 7) / 8;
-    }
-
-    /// getStoreSizeInBits - Return the number of bits overwritten by a store
-    /// of the specified value type.
-    unsigned getStoreSizeInBits() const {
-      return getStoreSize() * 8;
-    }
-
+    
     static MVT getFloatingPointVT(unsigned BitWidth) {
       switch (BitWidth) {
       default:
@@ -307,7 +288,7 @@ namespace llvm {
         return MVT::f128;
       }
     }
-
+    
     static MVT getIntegerVT(unsigned BitWidth) {
       switch (BitWidth) {
       default:
@@ -326,7 +307,7 @@ namespace llvm {
         return MVT::i128;
       }
     }
-
+    
     static MVT getVectorVT(MVT VT, unsigned NumElements) {
       switch (VT.SimpleTy) {
       default:
@@ -369,11 +350,7 @@ namespace llvm {
     }
   };
 
-
-  /// EVT - Extended Value Type.  Capable of holding value types which are not
-  /// native for any processor (such as the i12345 type), as well as the types
-  /// a MVT can represent.
-  struct EVT {
+  struct EVT { // EVT = Extended Value Type
   private:
     MVT V;
     const Type *LLVMTy;
@@ -550,7 +527,7 @@ namespace llvm {
     EVT getScalarType() const {
       return isVector() ? getVectorElementType() : *this;
     }
-
+    
     /// getVectorElementType - Given a vector type, return the type of
     /// each element.
     EVT getVectorElementType() const {

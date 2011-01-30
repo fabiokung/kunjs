@@ -66,9 +66,6 @@ namespace llvm {
 
   extern char &PreAllocSplittingID;
 
-  /// LiveStacks pass. An analysis keeping track of the liveness of stack slots.
-  extern char &LiveStacksID;
-
   /// SimpleRegisterCoalescing pass.  Aggressively coalesces every register
   /// copy it can.
   ///
@@ -98,11 +95,6 @@ namespace llvm {
   ///
   FunctionPass *createFastRegisterAllocator();
 
-  /// BasicRegisterAllocation Pass - This pass implements a degenerate global
-  /// register allocator using the basic regalloc framework.
-  ///
-  FunctionPass *createBasicRegisterAllocator();
-
   /// LinearScanRegisterAllocation Pass - This pass implements the linear scan
   /// register allocation algorithm, a global register allocator.
   ///
@@ -111,7 +103,7 @@ namespace llvm {
   /// PBQPRegisterAllocation Pass - This pass implements the Partitioned Boolean
   /// Quadratic Prograaming (PBQP) based register allocator.
   ///
-  FunctionPass *createDefaultPBQPRegisterAllocator();
+  FunctionPass *createPBQPRegisterAllocator();
 
   /// SimpleRegisterCoalescing Pass - Coalesce all copies possible.  Can run
   /// independently of the register allocator.
@@ -212,10 +204,6 @@ namespace llvm {
   /// be out of range of normal frame pointer or stack pointer index
   /// addressing.
   FunctionPass *createLocalStackSlotAllocationPass();
-
-  /// createExpandISelPseudosPass - This pass expands pseudo-instructions.
-  ///
-  FunctionPass *createExpandISelPseudosPass();
 
 } // End llvm namespace
 

@@ -15,7 +15,7 @@
 #ifndef LLVM_TARGET_TARGETINSTRDESC_H
 #define LLVM_TARGET_TARGETINSTRDESC_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
 
@@ -103,14 +103,13 @@ namespace TID {
     Terminator,
     Branch,
     IndirectBranch,
+    Predicable,
+    NotDuplicable,
     Compare,
-    MoveImm,
     DelaySlot,
     FoldableAsLoad,
     MayLoad,
     MayStore,
-    Predicable,
-    NotDuplicable,
     UnmodeledSideEffects,
     Commutable,
     ConvertibleTo3Addr,
@@ -351,12 +350,6 @@ public:
   /// isCompare - Return true if this instruction is a comparison.
   bool isCompare() const {
     return Flags & (1 << TID::Compare);
-  }
-  
-  /// isMoveImmediate - Return true if this instruction is a move immediate
-  /// (including conditional moves) instruction. 
-  bool isMoveImmediate() const {
-    return Flags & (1 << TID::MoveImm);
   }
   
   /// isNotDuplicable - Return true if this instruction cannot be safely

@@ -23,8 +23,8 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetRegistry.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/Path.h"
+#include "llvm/System/Host.h"
+#include "llvm/System/Path.h"
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
@@ -765,15 +765,6 @@ void cl::ParseCommandLineOptions(int argc, char **argv,
     }
   }
 
-  // Now that we know if -debug is specified, we can use it.
-  // Note that if ReadResponseFiles == true, this must be done before the
-  // memory allocated for the expanded command line is free()d below.
-  DEBUG(dbgs() << "Args: ";
-        for (int i = 0; i < argc; ++i)
-          dbgs() << argv[i] << ' ';
-        dbgs() << '\n';
-       );
-
   // Free all of the memory allocated to the map.  Command line options may only
   // be processed once!
   Opts.clear();
@@ -787,6 +778,12 @@ void cl::ParseCommandLineOptions(int argc, char **argv,
          i != e; ++i)
       free(*i);
   }
+
+  DEBUG(dbgs() << "Args: ";
+        for (int i = 0; i < argc; ++i)
+          dbgs() << argv[i] << ' ';
+        dbgs() << '\n';
+       );
 
   // If we had an error processing our arguments, don't let the program execute
   if (ErrorParsing) exit(1);

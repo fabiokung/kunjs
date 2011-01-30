@@ -197,12 +197,12 @@ unsigned FastISel::materializeRegForValue(const Value *V, MVT VT) {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DL,
             TII.get(TargetOpcode::IMPLICIT_DEF), Reg);
   }
-
+  
   // If target-independent code couldn't handle the value, give target-specific
   // code a try.
   if (!Reg && isa<Constant>(V))
     Reg = TargetMaterializeConstant(cast<Constant>(V));
-
+  
   // Don't cache constant materializations in the general ValueMap.
   // To do so would require tracking what uses they dominate.
   if (Reg != 0) {
@@ -234,7 +234,7 @@ unsigned FastISel::UpdateValueMap(const Value *I, unsigned Reg) {
     LocalValueMap[I] = Reg;
     return Reg;
   }
-
+  
   unsigned &AssignedReg = FuncInfo.ValueMap[I];
   if (AssignedReg == 0)
     // Use the new register.
@@ -414,7 +414,7 @@ bool FastISel::SelectGetElementPtr(const User *I) {
       // If this is a constant subscript, handle it quickly.
       if (const ConstantInt *CI = dyn_cast<ConstantInt>(Idx)) {
         if (CI->isZero()) continue;
-        uint64_t Offs =
+        uint64_t Offs = 
           TD.getTypeAllocSize(Ty)*cast<ConstantInt>(CI)->getSExtValue();
         N = FastEmit_ri_(VT, ISD::ADD, N, NIsKill, Offs, VT);
         if (N == 0)
@@ -423,7 +423,7 @@ bool FastISel::SelectGetElementPtr(const User *I) {
         NIsKill = true;
         continue;
       }
-
+      
       // N = N + Idx * ElementSize;
       uint64_t ElementSize = TD.getTypeAllocSize(Ty);
       std::pair<unsigned, bool> Pair = getRegForGEPIndex(Idx);
@@ -467,28 +467,16 @@ bool FastISel::SelectCall(const User *I) {
       return true;
 
     const Value *Address = DI->getAddress();
-    if (!Address || isa<UndefValue>(Address) || isa<AllocaInst>(Address))
+    if (!Address)
       return true;
-
-    unsigned Reg = 0;
-    unsigned Offset = 0;
-    if (const Argument *Arg = dyn_cast<Argument>(Address)) {
-      if (Arg->hasByValAttr()) {
-        // Byval arguments' frame index is recorded during argument lowering.
-        // Use this info directly.
-        Offset = FuncInfo.getByValArgumentFrameIndex(Arg);
-        if (Offset)
-          Reg = TRI.getFrameRegister(*FuncInfo.MF);
-      }
-    }
-    if (!Reg)
-      Reg = getRegForValue(Address);
-
-    if (Reg)
-      BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DL,
-              TII.get(TargetOpcode::DBG_VALUE))
-        .addReg(Reg, RegState::Debug).addImm(Offset)
-        .addMetadata(DI->getVariable());
+    if (isa<UndefValue>(Address))
+      return true;
+    const AllocaInst *AI = dyn_cast<AllocaInst>(Address);
+    // Don't handle byval struct arguments or VLAs, for example.
+    if (!AI)
+      // Building the map above is target independent.  Generating DBG_VALUE
+      // inline is target dependent; do this now.
+      (void)TargetSelectInstruction(cast<Instruction>(I));
     return true;
   }
   case Intrinsic::dbg_value: {
@@ -521,7 +509,7 @@ bool FastISel::SelectCall(const User *I) {
       BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DL, II)
         .addReg(0U).addImm(DI->getOffset())
         .addMetadata(DI->getVariable());
-    }
+    }     
     return true;
   }
   case Intrinsic::eh_exception: {
@@ -594,12 +582,12 @@ bool FastISel::SelectCall(const User *I) {
 bool FastISel::SelectCast(const User *I, unsigned Opcode) {
   EVT SrcVT = TLI.getValueType(I->getOperand(0)->getType());
   EVT DstVT = TLI.getValueType(I->getType());
-
+    
   if (SrcVT == MVT::Other || !SrcVT.isSimple() ||
       DstVT == MVT::Other || !DstVT.isSimple())
     // Unhandled type. Halt "fast" selection and bail.
     return false;
-
+    
   // Check if the destination type is legal. Or as a special case,
   // it may be i1 if we're doing a truncate because that's
   // easy and somewhat common.
@@ -641,7 +629,7 @@ bool FastISel::SelectCast(const User *I, unsigned Opcode) {
                                   InputReg, InputRegIsKill);
   if (!ResultReg)
     return false;
-
+    
   UpdateValueMap(I, ResultReg);
   return true;
 }
@@ -656,23 +644,23 @@ bool FastISel::SelectBitCast(const User *I) {
     return true;
   }
 
-  // Bitcasts of other values become reg-reg copies or BITCAST operators.
+  // Bitcasts of other values become reg-reg copies or BIT_CONVERT operators.
   EVT SrcVT = TLI.getValueType(I->getOperand(0)->getType());
   EVT DstVT = TLI.getValueType(I->getType());
-
+  
   if (SrcVT == MVT::Other || !SrcVT.isSimple() ||
       DstVT == MVT::Other || !DstVT.isSimple() ||
       !TLI.isTypeLegal(SrcVT) || !TLI.isTypeLegal(DstVT))
     // Unhandled type. Halt "fast" selection and bail.
     return false;
-
+  
   unsigned Op0 = getRegForValue(I->getOperand(0));
   if (Op0 == 0)
     // Unhandled operand. Halt "fast" selection and bail.
     return false;
 
   bool Op0IsKill = hasTrivialKill(I->getOperand(0));
-
+  
   // First, try to perform the bitcast by inserting a reg-reg copy.
   unsigned ResultReg = 0;
   if (SrcVT.getSimpleVT() == DstVT.getSimpleVT()) {
@@ -685,15 +673,15 @@ bool FastISel::SelectBitCast(const User *I) {
               ResultReg).addReg(Op0);
     }
   }
-
-  // If the reg-reg copy failed, select a BITCAST opcode.
+  
+  // If the reg-reg copy failed, select a BIT_CONVERT opcode.
   if (!ResultReg)
     ResultReg = FastEmit_r(SrcVT.getSimpleVT(), DstVT.getSimpleVT(),
-                           ISD::BITCAST, Op0, Op0IsKill);
-
+                           ISD::BIT_CONVERT, Op0, Op0IsKill);
+  
   if (!ResultReg)
     return false;
-
+  
   UpdateValueMap(I, ResultReg);
   return true;
 }
@@ -765,7 +753,7 @@ FastISel::SelectFNeg(const User *I) {
     return false;
 
   unsigned IntReg = FastEmit_r(VT.getSimpleVT(), IntVT.getSimpleVT(),
-                               ISD::BITCAST, OpReg, OpRegIsKill);
+                               ISD::BIT_CONVERT, OpReg, OpRegIsKill);
   if (IntReg == 0)
     return false;
 
@@ -777,7 +765,7 @@ FastISel::SelectFNeg(const User *I) {
     return false;
 
   ResultReg = FastEmit_r(IntVT.getSimpleVT(), VT.getSimpleVT(),
-                         ISD::BITCAST, IntResultReg, /*Kill=*/true);
+                         ISD::BIT_CONVERT, IntResultReg, /*Kill=*/true);
   if (ResultReg == 0)
     return false;
 
@@ -857,10 +845,10 @@ FastISel::SelectOperator(const User *I, unsigned Opcode) {
 
     // Dynamic-sized alloca is not handled yet.
     return false;
-
+    
   case Instruction::Call:
     return SelectCall(I);
-
+  
   case Instruction::BitCast:
     return SelectBitCast(I);
 
@@ -923,7 +911,7 @@ unsigned FastISel::FastEmit_r(MVT, MVT,
   return 0;
 }
 
-unsigned FastISel::FastEmit_rr(MVT, MVT,
+unsigned FastISel::FastEmit_rr(MVT, MVT, 
                                unsigned,
                                unsigned /*Op0*/, bool /*Op0IsKill*/,
                                unsigned /*Op1*/, bool /*Op1IsKill*/) {
@@ -1151,7 +1139,7 @@ unsigned FastISel::FastEmitInst_i(unsigned MachineInstOpcode,
                                   uint64_t Imm) {
   unsigned ResultReg = createResultReg(RC);
   const TargetInstrDesc &II = TII.get(MachineInstOpcode);
-
+  
   if (II.getNumDefs() >= 1)
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DL, II, ResultReg).addImm(Imm);
   else {

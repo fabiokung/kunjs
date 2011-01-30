@@ -126,9 +126,7 @@ namespace {
 
   public:
     static char ID; // Pass identification, replacement for typeid
-    DAE() : ModulePass(ID) {
-      initializeDAEPass(*PassRegistry::getPassRegistry());
-    }
+    DAE() : ModulePass(ID) {}
 
     bool runOnModule(Module &M);
 
@@ -153,7 +151,7 @@ namespace {
 
 
 char DAE::ID = 0;
-INITIALIZE_PASS(DAE, "deadargelim", "Dead Argument Elimination", false, false)
+INITIALIZE_PASS(DAE, "deadargelim", "Dead Argument Elimination", false, false);
 
 namespace {
   /// DAH - DeadArgumentHacking pass - Same as dead argument elimination, but
@@ -170,7 +168,7 @@ namespace {
 char DAH::ID = 0;
 INITIALIZE_PASS(DAH, "deadarghaX0r", 
                 "Dead Argument Hacking (BUGPOINT USE ONLY; DO NOT USE)",
-                false, false)
+                false, false);
 
 /// createDeadArgEliminationPass - This pass removes arguments from functions
 /// which are not used by the body of the function.
@@ -793,8 +791,7 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
       } else if (New->getType()->isVoidTy()) {
         // Our return value has uses, but they will get removed later on.
         // Replace by null for now.
-        if (!Call->getType()->isX86_MMXTy())
-          Call->replaceAllUsesWith(Constant::getNullValue(Call->getType()));
+        Call->replaceAllUsesWith(Constant::getNullValue(Call->getType()));
       } else {
         assert(RetTy->isStructTy() &&
                "Return type changed, but not into a void. The old return type"
@@ -857,8 +854,7 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
     } else {
       // If this argument is dead, replace any uses of it with null constants
       // (these are guaranteed to become unused later on).
-      if (!I->getType()->isX86_MMXTy())
-        I->replaceAllUsesWith(Constant::getNullValue(I->getType()));
+      I->replaceAllUsesWith(Constant::getNullValue(I->getType()));
     }
 
   // If we change the return value of the function we must rewrite any return

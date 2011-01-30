@@ -16,7 +16,7 @@
 
 #include "llvm/Support/AlignOf.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -201,7 +201,7 @@ public:
       char *End = Slab == Allocator.CurSlab ? Allocator.CurPtr :
                                               (char *)Slab + Slab->Size;
       for (char *Ptr = (char*)(Slab+1); Ptr < End; Ptr += sizeof(T)) {
-        Ptr = Allocator.AlignPtr(Ptr, alignOf<T>());
+        Ptr = Allocator.AlignPtr(Ptr, alignof<T>());
         if (Ptr + sizeof(T) <= End)
           reinterpret_cast<T*>(Ptr)->~T();
       }
@@ -221,12 +221,16 @@ public:
 inline void *operator new(size_t Size, llvm::BumpPtrAllocator &Allocator) {
   struct S {
     char c;
+#ifdef __GNUC__
+    char x __attribute__((aligned));
+#else
     union {
       double D;
       long double LD;
       long long L;
       void *P;
     } x;
+#endif
   };
   return Allocator.Allocate(Size, std::min((size_t)llvm::NextPowerOf2(Size),
                                            offsetof(S, x)));

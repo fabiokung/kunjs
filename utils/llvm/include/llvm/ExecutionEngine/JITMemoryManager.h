@@ -6,11 +6,15 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
+// This file defines the JITMemoryManagerInterface
+//
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_EXECUTION_ENGINE_JIT_MEMMANAGER_H
 #define LLVM_EXECUTION_ENGINE_JIT_MEMMANAGER_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include <string>
 
 namespace llvm {
@@ -25,8 +29,8 @@ namespace llvm {
 class JITMemoryManager {
 protected:
   bool HasGOT;
-
 public:
+
   JITMemoryManager() : HasGOT(false) {}
   virtual ~JITMemoryManager();
   
@@ -44,7 +48,7 @@ public:
 
   /// setPoisonMemory - Setting this flag to true makes the memory manager
   /// garbage values over freed memory.  This is useful for testing and
-  /// debugging, and may be turned on by default in debug mode.
+  /// debugging, and is be turned on by default in debug mode.
   virtual void setPoisonMemory(bool poison) = 0;
 
   //===--------------------------------------------------------------------===//
@@ -57,6 +61,7 @@ public:
   virtual void AllocateGOT() = 0;
   
   /// isManagingGOT - Return true if the AllocateGOT method is called.
+  ///
   bool isManagingGOT() const {
     return HasGOT;
   }
@@ -106,6 +111,7 @@ public:
   virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) = 0;
 
   /// allocateGlobal - Allocate memory for a global.
+  ///
   virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) = 0;
 
   /// deallocateFunctionBody - Free the specified function body.  The argument

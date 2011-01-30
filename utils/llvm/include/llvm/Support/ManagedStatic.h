@@ -14,8 +14,8 @@
 #ifndef LLVM_SUPPORT_MANAGED_STATIC_H
 #define LLVM_SUPPORT_MANAGED_STATIC_H
 
-#include "llvm/Support/Atomic.h"
-#include "llvm/Support/Threading.h"
+#include "llvm/System/Atomic.h"
+#include "llvm/System/Threading.h"
 
 namespace llvm {
 
@@ -89,6 +89,12 @@ public:
 
     return static_cast<C*>(Ptr);
   }
+};
+
+template<void (*CleanupFn)(void*)>
+class ManagedCleanup : public ManagedStaticBase {
+public:
+  void Register() { RegisterManagedStatic(0, CleanupFn); }
 };
 
 /// llvm_shutdown - Deallocate and destroy all ManagedStatic variables.

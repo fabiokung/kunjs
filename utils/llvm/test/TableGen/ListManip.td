@@ -1,6 +1,4 @@
 // RUN: tblgen %s
-// XFAIL: vg_leak
-
 class Bli<string _t>
 {
   string t = _t;

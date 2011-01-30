@@ -1,4 +1,4 @@
-// RUN: %llvmgxx -S %s -o -
+// RUN: %llvmgxx -c -emit-llvm %s -o -
 // PR1634
 
 namespace Manta

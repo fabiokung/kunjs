@@ -212,10 +212,6 @@ public:
   /// @brief Main interface to parsing a bitcode buffer.
   /// @returns true if an error occurred.
   bool ParseBitcodeInto(Module *M);
-
-  /// @brief Cheap mechanism to just extract module triple
-  /// @returns true if an error occurred.
-  bool ParseTriple(std::string &Triple);
 private:
   const Type *getTypeByID(unsigned ID, bool isTypeTable = false);
   Value *getFnValueByID(unsigned ID, const Type *Ty) {
@@ -274,7 +270,6 @@ private:
   bool ResolveGlobalAndAliasInits();
   bool ParseMetadata();
   bool ParseMetadataAttachment();
-  bool ParseModuleTriple(std::string &Triple);
 };
   
 } // End llvm namespace

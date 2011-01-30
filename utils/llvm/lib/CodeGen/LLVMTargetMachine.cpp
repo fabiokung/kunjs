@@ -20,7 +20,6 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -31,7 +30,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/StandardPasses.h"
 using namespace llvm;
 
 namespace llvm {
@@ -145,28 +143,10 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
     if (ShowMCEncoding)
       MCE = getTarget().createCodeEmitter(*this, *Context);
 
-    const TargetLoweringObjectFile &TLOF =
-      getTargetLowering()->getObjFileLowering();
-    int PointerSize = getTargetData()->getPointerSize();
-
-    MCStreamer *S;
-    if (hasMCUseLoc())
-      S = getTarget().createAsmStreamer(*Context, Out,
+    AsmStreamer.reset(createAsmStreamer(*Context, Out,
                                         getTargetData()->isLittleEndian(),
-                                        getVerboseAsm(),
-                                        InstPrinter,
-                                        MCE,
-                                        ShowMCInst);
-    else
-      S = createAsmStreamerNoLoc(*Context, Out,
-                                 getTargetData()->isLittleEndian(),
-                                 getVerboseAsm(),
-                                 &TLOF,
-                                 PointerSize,
-                                 InstPrinter,
-                                 MCE,
-                                 ShowMCInst);
-    AsmStreamer.reset(S);
+                                        getVerboseAsm(), InstPrinter,
+                                        MCE, ShowMCInst));
     break;
   }
   case CGFT_ObjectFile: {
@@ -180,7 +160,6 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
     AsmStreamer.reset(getTarget().createObjectStreamer(TargetTriple, *Context,
                                                        *TAB, Out, MCE,
                                                        hasMCRelaxAll()));
-    AsmStreamer.get()->InitSections();
     break;
   }
   case CGFT_Null:
@@ -274,9 +253,6 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
                                                MCContext *&OutContext) {
   // Standard LLVM-Level Passes.
 
-  // Basic AliasAnalysis support.
-  createStandardAliasAnalysisPasses(&PM);
-
   // Before running any passes, run the verifier to determine if the input
   // coming from the front-end and/or optimizer is valid.
   if (!DisableVerify)
@@ -363,9 +339,6 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   // Print the instruction selected machine code...
   printAndVerify(PM, "After Instruction Selection");
 
-  // Expand pseudo-instructions emitted by ISel.
-  PM.add(createExpandISelPseudosPass());
-
   // Optimize PHIs before DCE: removing dead PHI cycles may make more
   // instructions dead.
   if (OptLevel != CodeGenOpt::None)
@@ -383,15 +356,13 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
     PM.add(createDeadMachineInstructionElimPass());
     printAndVerify(PM, "After codegen DCE pass");
 
+    PM.add(createPeepholeOptimizerPass());
     if (!DisableMachineLICM)
       PM.add(createMachineLICMPass());
     PM.add(createMachineCSEPass());
     if (!DisableMachineSink)
       PM.add(createMachineSinkingPass());
     printAndVerify(PM, "After Machine LICM, CSE and Sinking passes");
-
-    PM.add(createPeepholeOptimizerPass());
-    printAndVerify(PM, "After codegen peephole optimization pass");
   }
 
   // Pre-ra tail duplication.

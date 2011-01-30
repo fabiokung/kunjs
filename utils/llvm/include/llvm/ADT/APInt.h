@@ -275,6 +275,12 @@ public:
   ///  objects, into FoldingSets.
   void Profile(FoldingSetNodeID& id) const;
 
+  /// @brief Used by the Bitcode serializer to emit APInts to Bitcode.
+  void Emit(Serializer& S) const;
+
+  /// @brief Used by the Bitcode deserializer to deserialize APInts.
+  void Read(Deserializer& D);
+
   /// @}
   /// @name Value Tests
   /// @{
@@ -296,7 +302,7 @@ public:
   /// @returns true if this APInt is positive.
   /// @brief Determine if this APInt Value is positive.
   bool isStrictlyPositive() const {
-    return isNonNegative() && !!*this;
+    return isNonNegative() && (*this) != 0;
   }
 
   /// This checks to see if the value has all bits of the APInt are set or not.
@@ -324,14 +330,15 @@ public:
   /// value for the APInt's bit width.
   /// @brief Determine if this is the smallest unsigned value.
   bool isMinValue() const {
-    return !*this;
+    return countPopulation() == 0;
   }
 
   /// This checks to see if the value of this APInt is the minimum signed
   /// value for the APInt's bit width.
   /// @brief Determine if this is the smallest signed value.
   bool isMinSignedValue() const {
-    return BitWidth == 1 ? VAL == 1 : isNegative() && isPowerOf2();
+    return BitWidth == 1 ? VAL == 1 :
+                           isNegative() && countPopulation() == 1;
   }
 
   /// @brief Check if this APInt has an N-bits unsigned integer value.
@@ -341,7 +348,7 @@ public:
       return true;
 
     if (isSingleWord())
-      return isUIntN(N, VAL);
+      return VAL == (VAL & (~0ULL >> (64 - N)));
     APInt Tmp(N, getNumWords(), pVal);
     Tmp.zext(getBitWidth());
     return Tmp == (*this);
@@ -354,11 +361,7 @@ public:
   }
 
   /// @returns true if the argument APInt value is a power of two > 0.
-  bool isPowerOf2() const {
-    if (isSingleWord())
-      return isPowerOf2_64(VAL);
-    return countPopulationSlowCase() == 1;
-  }
+  bool isPowerOf2() const;
 
   /// isSignBit - Return true if this is the value returned by getSignBit.
   bool isSignBit() const { return isMinSignedValue(); }
@@ -366,7 +369,7 @@ public:
   /// This converts the APInt to a boolean value as a test against zero.
   /// @brief Boolean conversion function.
   bool getBoolValue() const {
-    return !!*this;
+    return *this != 0;
   }
 
   /// getLimitedValue - If this value is smaller than the specified limit,
@@ -382,14 +385,12 @@ public:
   /// @{
   /// @brief Gets maximum unsigned value of APInt for specific bit width.
   static APInt getMaxValue(unsigned numBits) {
-    return getAllOnesValue(numBits);
+    return APInt(numBits, 0).set();
   }
 
   /// @brief Gets maximum signed value of APInt for a specific bit width.
   static APInt getSignedMaxValue(unsigned numBits) {
-    APInt API = getAllOnesValue(numBits);
-    API.clearBit(numBits - 1);
-    return API;
+    return APInt(numBits, 0).set().clear(numBits - 1);
   }
 
   /// @brief Gets minimum unsigned value of APInt for a specific bit width.
@@ -399,9 +400,7 @@ public:
 
   /// @brief Gets minimum signed value of APInt for a specific bit width.
   static APInt getSignedMinValue(unsigned numBits) {
-    APInt API(numBits, 0);
-    API.setBit(numBits - 1);
-    return API;
+    return APInt(numBits, 0).set(numBits - 1);
   }
 
   /// getSignBit - This is just a wrapper function of getSignedMinValue(), and
@@ -414,7 +413,7 @@ public:
   /// @returns the all-ones value for an APInt of the specified bit-width.
   /// @brief Get the all-ones value.
   static APInt getAllOnesValue(unsigned numBits) {
-    return APInt(numBits, -1ULL, true);
+    return APInt(numBits, 0).set();
   }
 
   /// @returns the '0' value for an APInt of the specified bit-width.
@@ -531,7 +530,7 @@ public:
   /// @brief Unary bitwise complement operator.
   APInt operator~() const {
     APInt Result(*this);
-    Result.flipAllBits();
+    Result.flip();
     return Result;
   }
 
@@ -742,11 +741,11 @@ public:
   /// RHS are treated as unsigned quantities for purposes of this division.
   /// @returns a new APInt value containing the division result
   /// @brief Unsigned division operation.
-  APInt udiv(const APInt &RHS) const;
+  APInt udiv(const APInt& RHS) const;
 
   /// Signed divide this APInt by APInt RHS.
   /// @brief Signed division function for APInt.
-  APInt sdiv(const APInt &RHS) const {
+  APInt sdiv(const APInt& RHS) const {
     if (isNegative())
       if (RHS.isNegative())
         return (-(*this)).udiv(-RHS);
@@ -764,11 +763,11 @@ public:
   /// which is *this.
   /// @returns a new APInt value containing the remainder result
   /// @brief Unsigned remainder operation.
-  APInt urem(const APInt &RHS) const;
+  APInt urem(const APInt& RHS) const;
 
   /// Signed remainder operation on APInt.
   /// @brief Function for signed remainder operation.
-  APInt srem(const APInt &RHS) const {
+  APInt srem(const APInt& RHS) const {
     if (isNegative())
       if (RHS.isNegative())
         return -((-(*this)).urem(-RHS));
@@ -789,7 +788,8 @@ public:
                       APInt &Quotient, APInt &Remainder);
 
   static void sdivrem(const APInt &LHS, const APInt &RHS,
-                      APInt &Quotient, APInt &Remainder) {
+                      APInt &Quotient, APInt &Remainder)
+  {
     if (LHS.isNegative()) {
       if (RHS.isNegative())
         APInt::udivrem(-LHS, -RHS, Quotient, Remainder);
@@ -804,16 +804,6 @@ public:
       APInt::udivrem(LHS, RHS, Quotient, Remainder);
     }
   }
-  
-  
-  // Operations that return overflow indicators.
-  APInt sadd_ov(const APInt &RHS, bool &Overflow) const;
-  APInt uadd_ov(const APInt &RHS, bool &Overflow) const;
-  APInt ssub_ov(const APInt &RHS, bool &Overflow) const;
-  APInt usub_ov(const APInt &RHS, bool &Overflow) const;
-  APInt sdiv_ov(const APInt &RHS, bool &Overflow) const;
-  APInt smul_ov(const APInt &RHS, bool &Overflow) const;
-  APInt sshl_ov(unsigned Amt, bool &Overflow) const;
 
   /// @returns the bit value at bitPosition
   /// @brief Array-indexing support.
@@ -878,7 +868,7 @@ public:
   /// the validity of the less-than relationship.
   /// @returns true if *this < RHS when both are considered unsigned.
   /// @brief Unsigned less than comparison
-  bool ult(const APInt &RHS) const;
+  bool ult(const APInt& RHS) const;
 
   /// Regards both *this as an unsigned quantity and compares it with RHS for
   /// the validity of the less-than relationship.
@@ -998,9 +988,6 @@ public:
     return sge(APInt(getBitWidth(), RHS));
   }
 
-  
-  
-  
   /// This operation tests if there are any pairs of corresponding bits
   /// between this APInt and RHS that are both set.
   bool intersects(const APInt &RHS) const {
@@ -1042,49 +1029,51 @@ public:
   /// @name Bit Manipulation Operators
   /// @{
   /// @brief Set every bit to 1.
-  void setAllBits() {
-    if (isSingleWord())
+  APInt& set() {
+    if (isSingleWord()) {
       VAL = -1ULL;
-    else {
-      // Set all the bits in all the words.
-      for (unsigned i = 0; i < getNumWords(); ++i)
-	pVal[i] = -1ULL;
+      return clearUnusedBits();
     }
+
+    // Set all the bits in all the words.
+    for (unsigned i = 0; i < getNumWords(); ++i)
+      pVal[i] = -1ULL;
     // Clear the unused ones
-    clearUnusedBits();
+    return clearUnusedBits();
   }
 
   /// Set the given bit to 1 whose position is given as "bitPosition".
   /// @brief Set a given bit to 1.
-  void setBit(unsigned bitPosition);
+  APInt& set(unsigned bitPosition);
 
   /// @brief Set every bit to 0.
-  void clearAllBits() {
+  APInt& clear() {
     if (isSingleWord())
       VAL = 0;
     else
       memset(pVal, 0, getNumWords() * APINT_WORD_SIZE);
+    return *this;
   }
 
   /// Set the given bit to 0 whose position is given as "bitPosition".
   /// @brief Set a given bit to 0.
-  void clearBit(unsigned bitPosition);
+  APInt& clear(unsigned bitPosition);
 
   /// @brief Toggle every bit to its opposite value.
-  void flipAllBits() {
-    if (isSingleWord())
+  APInt& flip() {
+    if (isSingleWord()) {
       VAL ^= -1ULL;
-    else {
-      for (unsigned i = 0; i < getNumWords(); ++i)
-        pVal[i] ^= -1ULL;
+      return clearUnusedBits();
     }
-    clearUnusedBits();
+    for (unsigned i = 0; i < getNumWords(); ++i)
+      pVal[i] ^= -1ULL;
+    return clearUnusedBits();
   }
 
   /// Toggle a given bit to its opposite value whose position is given
   /// as "bitPosition".
   /// @brief Toggles a given bit to its opposite value.
-  void flipBit(unsigned bitPosition);
+  APInt& flip(unsigned bitPosition);
 
   /// @}
   /// @name Value Characterization Functions
@@ -1292,27 +1281,37 @@ public:
   }
 
   /// The conversion does not do a translation from double to integer, it just
-  /// re-interprets the bits of the double.
+  /// re-interprets the bits of the double. Note that it is valid to do this on
+  /// any bit width but bits from V may get truncated.
   /// @brief Converts a double to APInt bits.
-  static APInt doubleToBits(double V) {
+  APInt& doubleToBits(double V) {
     union {
       uint64_t I;
       double D;
     } T;
     T.D = V;
-    return APInt(sizeof T * CHAR_BIT, T.I);
+    if (isSingleWord())
+      VAL = T.I;
+    else
+      pVal[0] = T.I;
+    return clearUnusedBits();
   }
 
   /// The conversion does not do a translation from float to integer, it just
-  /// re-interprets the bits of the float.
+  /// re-interprets the bits of the float. Note that it is valid to do this on
+  /// any bit width but bits from V may get truncated.
   /// @brief Converts a float to APInt bits.
-  static APInt floatToBits(float V) {
+  APInt& floatToBits(float V) {
     union {
       unsigned I;
       float F;
     } T;
     T.F = V;
-    return APInt(sizeof T * CHAR_BIT, T.I);
+    if (isSingleWord())
+      VAL = T.I;
+    else
+      pVal[0] = T.I;
+    return clearUnusedBits();
   }
 
   /// @}

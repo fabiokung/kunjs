@@ -30,14 +30,9 @@
 using namespace llvm;
 
 char RenderMachineFunction::ID = 0;
-INITIALIZE_PASS_BEGIN(RenderMachineFunction, "rendermf",
+INITIALIZE_PASS(RenderMachineFunction, "rendermf",
                 "Render machine functions (and related info) to HTML pages",
-                false, false)
-INITIALIZE_PASS_DEPENDENCY(SlotIndexes)
-INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
-INITIALIZE_PASS_END(RenderMachineFunction, "rendermf",
-                "Render machine functions (and related info) to HTML pages",
-                false, false)
+                false, false);
 
 static cl::opt<std::string>
 outputFileSuffix("rmf-file-suffix",
@@ -463,9 +458,14 @@ namespace llvm {
          liItr != liEnd; ++liItr) {
       LiveInterval *li = liItr->second;
 
+      const TargetRegisterClass *liTRC;
+
       if (TargetRegisterInfo::isPhysicalRegister(li->reg))
         continue;
       
+      liTRC = mri->getRegClass(li->reg);
+     
+
       // For all ranges in the current interal.
       for (LiveInterval::iterator lrItr = li->begin(),
              lrEnd = li->end();

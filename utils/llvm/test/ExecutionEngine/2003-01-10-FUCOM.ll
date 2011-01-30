@@ -1,4 +1,5 @@
-; RUN: lli %s > /dev/null
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 define i32 @main() {
 	%X = fadd double 0.000000e+00, 1.000000e+00		; <double> [#uses=1]

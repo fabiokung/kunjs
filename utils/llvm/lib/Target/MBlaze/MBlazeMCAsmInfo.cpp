@@ -14,9 +14,14 @@
 #include "MBlazeMCAsmInfo.h"
 using namespace llvm;
 
-MBlazeMCAsmInfo::MBlazeMCAsmInfo() {
-  SupportsDebugInformation    = true;
+MBlazeMCAsmInfo::MBlazeMCAsmInfo(const Target &T, StringRef TT) {
   AlignmentIsInBytes          = false;
+  Data16bitsDirective         = "\t.half\t";
+  Data32bitsDirective         = "\t.word\t";
+  Data64bitsDirective         = 0;
   PrivateGlobalPrefix         = "$";
+  CommentString               = "#";
+  ZeroDirective               = "\t.space\t";
   GPRel32Directive            = "\t.gpword\t";
+  HasSetDirective             = false;
 }

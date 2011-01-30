@@ -366,7 +366,7 @@ MSP430TargetLowering::LowerCCCArguments(SDValue Chain,
       unsigned ObjSize = VA.getLocVT().getSizeInBits()/8;
       if (ObjSize > 2) {
         errs() << "LowerFormalArguments Unhandled argument type: "
-             << EVT(VA.getLocVT()).getEVTString()
+             << VA.getLocVT().getSimpleVT().SimpleTy
              << "\n";
       }
       // Create the frame index object for this incoming parameter...
@@ -376,7 +376,7 @@ MSP430TargetLowering::LowerCCCArguments(SDValue Chain,
       //from this parameter
       SDValue FIN = DAG.getFrameIndex(FI, MVT::i16);
       InVals.push_back(DAG.getLoad(VA.getLocVT(), dl, Chain, FIN,
-                                   MachinePointerInfo::getFixedStack(FI),
+                                   PseudoSourceValue::getFixedStack(FI), 0,
                                    false, false, 0));
     }
   }
@@ -507,7 +507,8 @@ MSP430TargetLowering::LowerCCCCallTo(SDValue Chain, SDValue Callee,
 
 
       MemOpChains.push_back(DAG.getStore(Chain, dl, Arg, PtrOff,
-                                         MachinePointerInfo(),false, false, 0));
+                                         PseudoSourceValue::getStack(),
+                                         VA.getLocMemOffset(), false, false, 0));
     }
   }
 
@@ -913,13 +914,13 @@ SDValue MSP430TargetLowering::LowerRETURNADDR(SDValue Op,
     return DAG.getLoad(getPointerTy(), dl, DAG.getEntryNode(),
                        DAG.getNode(ISD::ADD, dl, getPointerTy(),
                                    FrameAddr, Offset),
-                       MachinePointerInfo(), false, false, 0);
+                       NULL, 0, false, false, 0);
   }
 
   // Just load the return address.
   SDValue RetAddrFI = getReturnAddressFrameIndex(DAG);
   return DAG.getLoad(getPointerTy(), dl, DAG.getEntryNode(),
-                     RetAddrFI, MachinePointerInfo(), false, false, 0);
+                     RetAddrFI, NULL, 0, false, false, 0);
 }
 
 SDValue MSP430TargetLowering::LowerFRAMEADDR(SDValue Op,
@@ -933,8 +934,7 @@ SDValue MSP430TargetLowering::LowerFRAMEADDR(SDValue Op,
   SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), dl,
                                          MSP430::FPW, VT);
   while (Depth--)
-    FrameAddr = DAG.getLoad(VT, dl, DAG.getEntryNode(), FrameAddr,
-                            MachinePointerInfo(),
+    FrameAddr = DAG.getLoad(VT, dl, DAG.getEntryNode(), FrameAddr, NULL, 0,
                             false, false, 0);
   return FrameAddr;
 }

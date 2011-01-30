@@ -1,4 +1,4 @@
-// RUN: %llvmgcc %s -S
+// RUN: %llvmgcc %s -S -emit-llvm
 struct TFENode {
   TFENode(const TFENode& inNode);
 };

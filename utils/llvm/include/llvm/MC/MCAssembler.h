@@ -17,7 +17,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 #include <vector> // FIXME: Shouldn't be needed.
 
 namespace llvm {
@@ -49,9 +49,7 @@ public:
     FT_Data,
     FT_Fill,
     FT_Inst,
-    FT_Org,
-    FT_Dwarf,
-    FT_LEB
+    FT_Org
   };
 
 private:
@@ -319,13 +317,10 @@ class MCOrgFragment : public MCFragment {
   /// Value - Value to use for filling bytes.
   int8_t Value;
 
-  /// Size - The current estimate of the size.
-  unsigned Size;
-
 public:
   MCOrgFragment(const MCExpr &_Offset, int8_t _Value, MCSectionData *SD = 0)
     : MCFragment(FT_Org, SD),
-      Offset(&_Offset), Value(_Value), Size(0) {}
+      Offset(&_Offset), Value(_Value) {}
 
   /// @name Accessors
   /// @{
@@ -334,81 +329,12 @@ public:
 
   uint8_t getValue() const { return Value; }
 
-  unsigned getSize() const { return Size; }
-
-  void setSize(unsigned Size_) { Size = Size_; }
   /// @}
 
   static bool classof(const MCFragment *F) {
     return F->getKind() == MCFragment::FT_Org;
   }
   static bool classof(const MCOrgFragment *) { return true; }
-};
-
-class MCLEBFragment : public MCFragment {
-  /// Value - The value this fragment should contain.
-  const MCExpr *Value;
-
-  /// IsSigned - True if this is a sleb128, false if uleb128.
-  bool IsSigned;
-
-  SmallString<8> Contents;
-public:
-  MCLEBFragment(const MCExpr &Value_, bool IsSigned_, MCSectionData *SD)
-    : MCFragment(FT_LEB, SD),
-      Value(&Value_), IsSigned(IsSigned_) { Contents.push_back(0); }
-
-  /// @name Accessors
-  /// @{
-
-  const MCExpr &getValue() const { return *Value; }
-
-  bool isSigned() const { return IsSigned; }
-
-  SmallString<8> &getContents() { return Contents; }
-  const SmallString<8> &getContents() const { return Contents; }
-
-  /// @}
-
-  static bool classof(const MCFragment *F) {
-    return F->getKind() == MCFragment::FT_LEB;
-  }
-  static bool classof(const MCLEBFragment *) { return true; }
-};
-
-class MCDwarfLineAddrFragment : public MCFragment {
-  /// LineDelta - the value of the difference between the two line numbers
-  /// between two .loc dwarf directives.
-  int64_t LineDelta;
-
-  /// AddrDelta - The expression for the difference of the two symbols that
-  /// make up the address delta between two .loc dwarf directives.
-  const MCExpr *AddrDelta;
-
-  SmallString<8> Contents;
-
-public:
-  MCDwarfLineAddrFragment(int64_t _LineDelta, const MCExpr &_AddrDelta,
-                      MCSectionData *SD = 0)
-    : MCFragment(FT_Dwarf, SD),
-      LineDelta(_LineDelta), AddrDelta(&_AddrDelta) { Contents.push_back(0); }
-
-  /// @name Accessors
-  /// @{
-
-  int64_t getLineDelta() const { return LineDelta; }
-
-  const MCExpr &getAddrDelta() const { return *AddrDelta; }
-
-  SmallString<8> &getContents() { return Contents; }
-  const SmallString<8> &getContents() const { return Contents; }
-
-  /// @}
-
-  static bool classof(const MCFragment *F) {
-    return F->getKind() == MCFragment::FT_Dwarf;
-  }
-  static bool classof(const MCDwarfLineAddrFragment *) { return true; }
 };
 
 // FIXME: Should this be a separate class, or just merged into MCSection? Since
@@ -475,8 +401,6 @@ public:
 
   unsigned getLayoutOrder() const { return LayoutOrder; }
   void setLayoutOrder(unsigned Value) { LayoutOrder = Value; }
-
-  uint64_t getAddress() const { return Address; }
 
   /// @name Fragment Access
   /// @{
@@ -681,7 +605,6 @@ private:
 
   unsigned RelaxAll : 1;
   unsigned SubsectionsViaSymbols : 1;
-  unsigned PadSectionToAlignment : 1;
 
 private:
   /// Evaluate a fixup to a relocatable expression and the value which should be
@@ -697,42 +620,28 @@ private:
   /// \return Whether the fixup value was fully resolved. This is true if the
   /// \arg Value result is fixed, otherwise the value may change due to
   /// relocation.
-  bool EvaluateFixup(const MCObjectWriter &Writer, const MCAsmLayout &Layout,
+  bool EvaluateFixup(const MCAsmLayout &Layout,
                      const MCFixup &Fixup, const MCFragment *DF,
                      MCValue &Target, uint64_t &Value) const;
 
   /// Check whether a fixup can be satisfied, or whether it needs to be relaxed
   /// (increased in size, in order to hold its value correctly).
-  bool FixupNeedsRelaxation(const MCObjectWriter &Writer,
-                            const MCFixup &Fixup, const MCFragment *DF,
+  bool FixupNeedsRelaxation(const MCFixup &Fixup, const MCFragment *DF,
                             const MCAsmLayout &Layout) const;
 
   /// Check whether the given fragment needs relaxation.
-  bool FragmentNeedsRelaxation(const MCObjectWriter &Writer,
-                               const MCInstFragment *IF,
+  bool FragmentNeedsRelaxation(const MCInstFragment *IF,
                                const MCAsmLayout &Layout) const;
 
   /// Compute the effective fragment size assuming it is layed out at the given
   /// \arg SectionAddress and \arg FragmentOffset.
-  uint64_t ComputeFragmentSize(const MCFragment &F,
+  uint64_t ComputeFragmentSize(MCAsmLayout &Layout, const MCFragment &F,
                                uint64_t SectionAddress,
                                uint64_t FragmentOffset) const;
 
   /// LayoutOnce - Perform one layout iteration and return true if any offsets
   /// were adjusted.
-  bool LayoutOnce(const MCObjectWriter &Writer, MCAsmLayout &Layout);
-
-  bool RelaxInstruction(const MCObjectWriter &Writer, MCAsmLayout &Layout,
-                        MCInstFragment &IF);
-
-  bool RelaxOrg(const MCObjectWriter &Writer, MCAsmLayout &Layout,
-                MCOrgFragment &OF);
-
-  bool RelaxLEB(const MCObjectWriter &Writer, MCAsmLayout &Layout,
-                MCLEBFragment &IF);
-
-  bool RelaxDwarfLineAddr(const MCObjectWriter &Writer, MCAsmLayout &Layout,
-			  MCDwarfLineAddrFragment &DF);
+  bool LayoutOnce(MCAsmLayout &Layout);
 
   /// FinishLayout - Finalize a layout, including fragment lowering.
   void FinishLayout(MCAsmLayout &Layout);
@@ -740,7 +649,8 @@ private:
 public:
   /// Find the symbol which defines the atom containing the given symbol, or
   /// null if there is no such symbol.
-  const MCSymbolData *getAtom(const MCSymbolData *Symbol) const;
+  const MCSymbolData *getAtom(const MCAsmLayout &Layout,
+                              const MCSymbolData *Symbol) const;
 
   /// Check whether a particular symbol is visible to the linker and is required
   /// in the symbol table, or whether it can be discarded by the assembler. This
@@ -754,6 +664,8 @@ public:
   void WriteSectionData(const MCSectionData *Section, const MCAsmLayout &Layout,
                         MCObjectWriter *OW) const;
 
+  void AddSectionToTheEnd(MCSectionData &SD, MCAsmLayout &Layout);
+
 public:
   /// Construct a new assembler instance.
   ///
@@ -764,8 +676,7 @@ public:
   // option is to make this abstract, and have targets provide concrete
   // implementations as we do with AsmParser.
   MCAssembler(MCContext &_Context, TargetAsmBackend &_Backend,
-              MCCodeEmitter &_Emitter, bool _PadSectionToAlignment,
-              raw_ostream &OS);
+              MCCodeEmitter &_Emitter, raw_ostream &OS);
   ~MCAssembler();
 
   MCContext &getContext() const { return Context; }

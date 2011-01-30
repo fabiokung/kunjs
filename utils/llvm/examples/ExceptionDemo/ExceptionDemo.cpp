@@ -1974,9 +1974,6 @@ int main(int argc, char* argv[]) {
         // Optimizations turned on
 #ifdef ADD_OPT_PASSES
 
-        // Basic AliasAnslysis support for GVN.
-        fpm.add(llvm::createBasicAliasAnalysisPass());
-
         // Promote allocas to registers.
         fpm.add(llvm::createPromoteMemoryToRegisterPass());
 

@@ -39,7 +39,7 @@ N: Misha Brukman
 E: brukman+llvm@uiuc.edu
 W: http://misha.brukman.net
 D: Portions of X86 and Sparc JIT compilers, PowerPC backend
-D: Incremental bitcode loader
+D: Incremental bytecode loader
 
 N: Cameron Buschardt
 E: buschard@uiuc.edu

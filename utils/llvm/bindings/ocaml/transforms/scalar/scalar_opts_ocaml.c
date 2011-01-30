@@ -86,6 +86,12 @@ CAMLprim value llvm_add_loop_rotation(LLVMPassManagerRef PM) {
 }
 
 /* [<Llvm.PassManager.any] Llvm.PassManager.t -> unit */
+CAMLprim value llvm_add_loop_index_split(LLVMPassManagerRef PM) {
+  LLVMAddLoopIndexSplitPass(PM);
+  return Val_unit;
+}
+
+/* [<Llvm.PassManager.any] Llvm.PassManager.t -> unit */
 CAMLprim value llvm_add_memory_to_register_promotion(LLVMPassManagerRef PM) {
   LLVMAddPromoteMemoryToRegisterPass(PM);
   return Val_unit;

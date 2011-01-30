@@ -40,8 +40,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Support/Signals.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/System/Signals.h"
 #include <algorithm>
 #include <cstdio>
 using namespace llvm;
@@ -59,7 +59,6 @@ enum ActionType {
   GenClangAttrList,
   GenClangAttrPCHRead,
   GenClangAttrPCHWrite,
-  GenClangAttrSpellingList,
   GenClangDiagsDefs,
   GenClangDiagGroups,
   GenClangDeclNodes,
@@ -128,8 +127,6 @@ namespace {
                                "Generate clang PCH attribute reader"),
                     clEnumValN(GenClangAttrPCHWrite, "gen-clang-attr-pch-write",
                                "Generate clang PCH attribute writer"),
-                    clEnumValN(GenClangAttrSpellingList, "gen-clang-attr-spelling-list",
-                               "Generate a clang attribute spelling list"),
                     clEnumValN(GenClangDiagsDefs, "gen-clang-diags-defs",
                                "Generate Clang diagnostics definitions"),
                     clEnumValN(GenClangDiagGroups, "gen-clang-diag-groups",
@@ -177,7 +174,7 @@ RecordKeeper llvm::Records;
 
 static SourceMgr SrcMgr;
 
-void llvm::PrintError(SMLoc ErrorLoc, const Twine &Msg) {
+void llvm::PrintError(SMLoc ErrorLoc, const std::string &Msg) {
   SrcMgr.PrintMessage(ErrorLoc, Msg, "error");
 }
 
@@ -276,9 +273,6 @@ int main(int argc, char **argv) {
       break;
     case GenClangAttrPCHWrite:
       ClangAttrPCHWriteEmitter(Records).run(Out.os());
-      break;
-    case GenClangAttrSpellingList:
-      ClangAttrSpellingListEmitter(Records).run(Out.os());
       break;
     case GenClangDiagsDefs:
       ClangDiagsDefsEmitter(Records, ClangComponent).run(Out.os());

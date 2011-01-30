@@ -1,4 +1,5 @@
-; RUN: lli %s > /dev/null
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 ; This testcase exposes a bug in the local register allocator where it runs out
 ; of registers (due to too many overlapping live ranges), but then attempts to

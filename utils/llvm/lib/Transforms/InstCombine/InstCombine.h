@@ -81,9 +81,7 @@ public:
   BuilderTy *Builder;
       
   static char ID; // Pass identification, replacement for typeid
-  InstCombiner() : FunctionPass(ID), TD(0), Builder(0) {
-    initializeInstCombinerPass(*PassRegistry::getPassRegistry());
-  }
+  InstCombiner() : FunctionPass(ID), TD(0), Builder(0) {}
 
 public:
   virtual bool runOnFunction(Function &F);
@@ -286,15 +284,9 @@ public:
 
 private:
 
-  /// SimplifyAssociativeOrCommutative - This performs a few simplifications for
-  /// operators which are associative or commutative.
-  bool SimplifyAssociativeOrCommutative(BinaryOperator &I);
-
-  /// SimplifyByFactorizing - This tries to simplify binary operations which
-  /// some other binary operation distributes over by factorizing out a common
-  /// term (eg "(A*B)+(A*C)" -> "A*(B+C)").  Returns the simplified value, or
-  /// null if no simplification was performed.
-  Instruction *SimplifyByFactorizing(BinaryOperator &I);
+  /// SimplifyCommutative - This performs a few simplifications for 
+  /// commutative operators.
+  bool SimplifyCommutative(BinaryOperator &I);
 
   /// SimplifyDemandedUseBits - Attempts to replace V with a simpler value
   /// based on the demanded bits.

@@ -65,9 +65,6 @@ protected:
   ///
   bool HasX86_64;
 
-  /// HasPOPCNT - True if the processor supports POPCNT.
-  bool HasPOPCNT;
-
   /// HasSSE4A - True if the processor supports SSE4A instructions.
   bool HasSSE4A;
 
@@ -153,7 +150,6 @@ public:
   bool hasSSE4A() const { return HasSSE4A; }
   bool has3DNow() const { return X863DNowLevel >= ThreeDNow; }
   bool has3DNowA() const { return X863DNowLevel >= ThreeDNowA; }
-  bool hasPOPCNT() const { return HasPOPCNT; }
   bool hasAVX() const { return HasAVX; }
   bool hasAES() const { return HasAES; }
   bool hasCLMUL() const { return HasCLMUL; }
@@ -192,6 +188,20 @@ public:
 
   bool isTargetWin32() const {
     return !Is64Bit && (isTargetMingw() || isTargetWindows());
+  }
+
+  std::string getDataLayout() const {
+    const char *p;
+    if (is64Bit())
+      p = "e-p:64:64-s:64-f64:64:64-i64:64:64-f80:128:128-n8:16:32:64";
+    else if (isTargetDarwin())
+      p = "e-p:32:32-f64:32:64-i64:32:64-f80:128:128-n8:16:32";
+    else if (isTargetMingw() || isTargetWindows())
+      p = "e-p:32:32-f64:64:64-i64:64:64-f80:32:32-n8:16:32";
+    else
+      p = "e-p:32:32-f64:32:64-i64:32:64-f80:32:32-n8:16:32";
+
+    return std::string(p);
   }
 
   bool isPICStyleSet() const { return PICStyle != PICStyles::None; }

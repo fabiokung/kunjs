@@ -240,7 +240,7 @@ typedef bit_value_t insn_t[BIT_WIDTH];
 /// the Filter/FilterChooser combo does not know how to distinguish among the
 /// Opcodes assigned.
 ///
-/// An example of a conflict is 
+/// An example of a conflcit is 
 ///
 /// Conflict:
 ///                     111101000.00........00010000....
@@ -801,7 +801,7 @@ void FilterChooser::emitTop(raw_ostream &o, unsigned &Indentation) {
 
   o << '\n';
 
-  o.indent(Indentation) <<"static uint16_t decodeInstruction(field_t insn) {\n";
+  o.indent(Indentation) << "static uint16_t decodeInstruction(field_t insn) {\n";
 
   ++Indentation; ++Indentation;
   // Emits code to decode the instructions.
@@ -1543,9 +1543,8 @@ protected:
   TARGET_NAME_t TargetName;
 };
 
-bool ARMDecoderEmitter::
-ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
-                                  TARGET_NAME_t TN) {
+bool ARMDecoderEmitter::ARMDEBackend::populateInstruction(
+    const CodeGenInstruction &CGI, TARGET_NAME_t TN) {
   const Record &Def = *CGI.TheDef;
   const StringRef Name = Def.getName();
   uint8_t Form = getByteField(Def, "Form");
@@ -1571,6 +1570,10 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
         Name.find("CMNz") != std::string::npos */)
       return false;
 
+    // Ignore pseudo instructions.
+    if (Name == "BXr9" || Name == "BMOVPCRX" || Name == "BMOVPCRXr9")
+      return false;
+
     // Tail calls are other patterns that generate existing instructions.
     if (Name == "TCRETURNdi" || Name == "TCRETURNdiND" ||
         Name == "TCRETURNri" || Name == "TCRETURNriND" ||
@@ -1578,6 +1581,11 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
         Name == "TAILJMPdND" || Name == "TAILJMPdNDt" ||
         Name == "TAILJMPr"  || Name == "TAILJMPrND" ||
         Name == "MOVr_TC")
+      return false;
+
+    // VLDMQ/VSTMQ can be handled with the more generic VLDMD/VSTMD.
+    if (Name == "VLDMQ" || Name == "VLDMQ_UPD" ||
+        Name == "VSTMQ" || Name == "VSTMQ_UPD")
       return false;
 
     //
@@ -1602,13 +1610,13 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
     // better off using the generic RSCri and RSCrs instructions.
     if (Name == "RSCSri" || Name == "RSCSrs") return false;
 
-    // MOVCCr, MOVCCs, MOVCCi, MOVCCi16, FCYPScc, FCYPDcc, FNEGScc, and
-    // FNEGDcc are used in the compiler to implement conditional moves.
-    // We can ignore them in favor of their more generic versions of
-    // instructions. See also SDNode *ARMDAGToDAGISel::Select(SDValue Op).
-    if (Name == "MOVCCr"   || Name == "MOVCCs"  || Name == "MOVCCi" ||
-        Name == "MOVCCi16" || Name == "FCPYScc" || Name == "FCPYDcc" ||
-        Name == "FNEGScc"  || Name == "FNEGDcc")
+    // MOVCCr, MOVCCs, MOVCCi, FCYPScc, FCYPDcc, FNEGScc, and FNEGDcc are used
+    // in the compiler to implement conditional moves.  We can ignore them in
+    // favor of their more generic versions of instructions.
+    // See also SDNode *ARMDAGToDAGISel::Select(SDValue Op).
+    if (Name == "MOVCCr" || Name == "MOVCCs" || Name == "MOVCCi" ||
+        Name == "FCPYScc" || Name == "FCPYDcc" ||
+        Name == "FNEGScc" || Name == "FNEGDcc")
       return false;
 
     // Ditto for VMOVDcc, VMOVScc, VNEGDcc, and VNEGScc.
@@ -1621,10 +1629,10 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
     // operations in order to work around some performance issues.
     if (Name.find("_sfp") != std::string::npos) return false;
 
-    // LDMIA_RET is a special case of LDM (Load Multiple) where the registers
+    // LDM_RET is a special case of LDM (Load Multiple) where the registers
     // loaded include the PC, causing a branch to a loaded address.  Ignore
-    // the LDMIA_RET instruction when decoding.
-    if (Name == "LDMIA_RET") return false;
+    // the LDM_RET instruction when decoding.
+    if (Name == "LDM_RET") return false;
 
     // Bcc is in a more generic form than B.  Ignore B when decoding.
     if (Name == "B") return false;
@@ -1663,17 +1671,18 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
     // VREV64qf is equivalent to VREV64q32.
     if (Name == "VREV64df" || Name == "VREV64qf") return false;
 
-    // VDUPLNfd is equivalent to VDUPLN32d.
-    // VDUPLNfq is equivalent to VDUPLN32q.
+    // VDUPLNfd is equivalent to VDUPLN32d; VDUPfdf is specialized VDUPLN32d.
+    // VDUPLNfq is equivalent to VDUPLN32q; VDUPfqf is specialized VDUPLN32q.
     // VLD1df is equivalent to VLD1d32.
     // VLD1qf is equivalent to VLD1q32.
     // VLD2d64 is equivalent to VLD1q64.
     // VST1df is equivalent to VST1d32.
     // VST1qf is equivalent to VST1q32.
     // VST2d64 is equivalent to VST1q64.
-    if (Name == "VDUPLNfd" || Name == "VDUPLNfq" ||
-        Name == "VLD1df"   || Name == "VLD1qf"   || Name == "VLD2d64" ||
-        Name == "VST1df"   || Name == "VST1qf"   || Name == "VST2d64")
+    if (Name == "VDUPLNfd" || Name == "VDUPfdf" ||
+        Name == "VDUPLNfq" || Name == "VDUPfqf" ||
+        Name == "VLD1df" || Name == "VLD1qf" || Name == "VLD2d64" ||
+        Name == "VST1df" || Name == "VST1qf" || Name == "VST2d64")
       return false;
   } else if (TN == TARGET_THUMB) {
     if (!thumbInstruction(Form))
@@ -1710,26 +1719,30 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
     if (Name == "t2LDRDpci")
       return false;
 
+    // Ignore t2TBB, t2TBH and prefer the generic t2TBBgen, t2TBHgen.
+    if (Name == "t2TBB" || Name == "t2TBH")
+      return false;
+
     // Resolve conflicts:
     //
     //   tBfar conflicts with tBLr9
     //   tCMNz conflicts with tCMN (with assembly format strings being equal)
-    //   tPOP_RET/t2LDMIA_RET conflict with tPOP/t2LDM (ditto)
+    //   tPOP_RET/t2LDM_RET conflict with tPOP/t2LDM (ditto)
     //   tMOVCCi conflicts with tMOVi8
     //   tMOVCCr conflicts with tMOVgpr2gpr
+    //   tBR_JTr conflicts with tBRIND
     //   tSpill conflicts with tSTRspi
     //   tLDRcp conflicts with tLDRspi
     //   tRestore conflicts with tLDRspi
     //   t2LEApcrelJT conflicts with t2LEApcrel
-    //   t2MOVCCi16 conflicts with tMOVi16
     if (Name == "tBfar" ||
         /* Name == "tCMNz" || */ Name == "tCMPzi8" || Name == "tCMPzr" ||
         Name == "tCMPzhir" || /* Name == "t2CMNzrr" || Name == "t2CMNzrs" ||
         Name == "t2CMNzri" || */ Name == "t2CMPzrr" || Name == "t2CMPzrs" ||
-        Name == "t2CMPzri" || Name == "tPOP_RET" || Name == "t2LDMIA_RET" ||
-        Name == "tMOVCCi" || Name == "tMOVCCr" ||
+        Name == "t2CMPzri" || Name == "tPOP_RET" || Name == "t2LDM_RET" ||
+        Name == "tMOVCCi" || Name == "tMOVCCr" || Name == "tBR_JTr" ||
         Name == "tSpill" || Name == "tLDRcp" || Name == "tRestore" ||
-        Name == "t2LEApcrelJT" || Name == "t2MOVCCi16")
+        Name == "t2LEApcrelJT")
       return false;
   }
 
@@ -1750,8 +1763,8 @@ ARMDEBackend::populateInstruction(const CodeGenInstruction &CGI,
       errs() << '\n';
 
       // Dumps the list of operand info.
-      for (unsigned i = 0, e = CGI.Operands.size(); i != e; ++i) {
-        const CGIOperandList::OperandInfo &Info = CGI.Operands[i];
+      for (unsigned i = 0, e = CGI.OperandList.size(); i != e; ++i) {
+        CodeGenInstruction::OperandInfo Info = CGI.OperandList[i];
         const std::string &OperandName = Info.Name;
         const Record &OperandDef = *Info.Rec;
 
@@ -1813,7 +1826,7 @@ void ARMDecoderEmitter::ARMDEBackend::emit(raw_ostream &o) {
     assert(0 && "Unreachable code!");
   }
 
-  o << "#include \"llvm/Support/DataTypes.h\"\n";
+  o << "#include \"llvm/System/DataTypes.h\"\n";
   o << "#include <assert.h>\n";
   o << '\n';
   o << "namespace llvm {\n\n";

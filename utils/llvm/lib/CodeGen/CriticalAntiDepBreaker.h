@@ -50,8 +50,6 @@ class TargetRegisterInfo;
 
     /// RegRegs - Map registers to all their references within a live range.
     std::multimap<unsigned, MachineOperand *> RegRefs;
-    typedef std::multimap<unsigned, MachineOperand *>::const_iterator
-      RegRefIter;
 
     /// KillIndices - The index of the most recent kill (proceding bottom-up),
     /// or ~0u if the register is not live.
@@ -92,14 +90,10 @@ class TargetRegisterInfo;
   private:
     void PrescanInstruction(MachineInstr *MI);
     void ScanInstruction(MachineInstr *MI, unsigned Count);
-    bool isNewRegModifiedByRefs(RegRefIter RegRefBegin,
-                                RegRefIter RegRefEnd,
-                                unsigned NewReg);
-    unsigned findSuitableFreeRegister(RegRefIter RegRefBegin,
-                                      RegRefIter RegRefEnd,
+    unsigned findSuitableFreeRegister(MachineInstr *MI,
                                       unsigned AntiDepReg,
                                       unsigned LastNewReg,
-                                      const TargetRegisterClass *RC);
+                                      const TargetRegisterClass *);
   };
 }
 

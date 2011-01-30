@@ -20,8 +20,6 @@ namespace llvm {
 class LLVMContextImpl;
 class StringRef;
 class Instruction;
-class Module;
-class SMDiagnostic;
 template <typename T> class SmallVectorImpl;
 
 /// This is an important class for using LLVM in a threaded context.  It
@@ -30,6 +28,10 @@ template <typename T> class SmallVectorImpl;
 /// LLVMContext itself provides no locking guarantees, so you should be careful
 /// to have one context per thread.
 class LLVMContext {
+  // DO NOT IMPLEMENT
+  LLVMContext(LLVMContext&);
+  void operator=(LLVMContext&);
+
 public:
   LLVMContextImpl *const pImpl;
   LLVMContext();
@@ -38,8 +40,7 @@ public:
   // Pinned metadata names, which always have the same value.  This is a
   // compile-time performance optimization, not a correctness optimization.
   enum {
-    MD_dbg = 0,  // "dbg"
-    MD_tbaa = 1  // "tbaa"
+    MD_dbg = 0   // "dbg"
   };
   
   /// getMDKindID - Return a unique non-zero ID for the specified metadata kind.
@@ -50,23 +51,18 @@ public:
   /// custom metadata IDs registered in this LLVMContext.
   void getMDKindNames(SmallVectorImpl<StringRef> &Result) const;
   
-  
-  typedef void (*InlineAsmDiagHandlerTy)(const SMDiagnostic&, void *Context,
-                                         unsigned LocCookie);
-  
   /// setInlineAsmDiagnosticHandler - This method sets a handler that is invoked
   /// when problems with inline asm are detected by the backend.  The first
-  /// argument is a function pointer and the second is a context pointer that
-  /// gets passed into the DiagHandler.
+  /// argument is a function pointer (of type SourceMgr::DiagHandlerTy) and the
+  /// second is a context pointer that gets passed into the DiagHandler.
   ///
-  /// LLVMContext doesn't take ownership or interpret either of these
+  /// LLVMContext doesn't take ownership or interpreter either of these
   /// pointers.
-  void setInlineAsmDiagnosticHandler(InlineAsmDiagHandlerTy DiagHandler,
-                                     void *DiagContext = 0);
+  void setInlineAsmDiagnosticHandler(void *DiagHandler, void *DiagContext = 0);
 
   /// getInlineAsmDiagnosticHandler - Return the diagnostic handler set by
   /// setInlineAsmDiagnosticHandler.
-  InlineAsmDiagHandlerTy getInlineAsmDiagnosticHandler() const;
+  void *getInlineAsmDiagnosticHandler() const;
 
   /// getInlineAsmDiagnosticContext - Return the diagnostic context set by
   /// setInlineAsmDiagnosticHandler.
@@ -81,21 +77,6 @@ public:
   void emitError(unsigned LocCookie, StringRef ErrorStr);
   void emitError(const Instruction *I, StringRef ErrorStr);
   void emitError(StringRef ErrorStr);
-
-private:
-  // DO NOT IMPLEMENT
-  LLVMContext(LLVMContext&);
-  void operator=(LLVMContext&);
-
-  /// addModule - Register a module as being instantiated in this context.  If
-  /// the context is deleted, the module will be deleted as well.
-  void addModule(Module*);
-  
-  /// removeModule - Unregister a module from this context.
-  void removeModule(Module*);
-  
-  // Module needs access to the add/removeModule methods.
-  friend class Module;
 };
 
 /// getGlobalContext - Returns a global context.  This is for LLVM clients that

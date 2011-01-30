@@ -1,4 +1,5 @@
-; RUN: lli %s > /dev/null
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 ;
 ; Regression Test: EnvironmentTest.ll

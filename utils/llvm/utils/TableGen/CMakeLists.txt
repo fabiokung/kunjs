@@ -1,6 +1,3 @@
-set(LLVM_REQUIRES_EH 1)
-set(LLVM_REQUIRES_RTTI 1)
-
 add_executable(tblgen
   ARMDecoderEmitter.cpp
   AsmMatcherEmitter.cpp
@@ -30,7 +27,6 @@ add_executable(tblgen
   OptParserEmitter.cpp
   Record.cpp
   RegisterInfoEmitter.cpp
-  StringMatcher.cpp
   SubtargetEmitter.cpp
   TGLexer.cpp
   TGParser.cpp
@@ -41,7 +37,7 @@ add_executable(tblgen
   X86RecognizableInstr.cpp
   )
 
-target_link_libraries(tblgen LLVMSupport)
+target_link_libraries(tblgen LLVMSupport LLVMSystem)
 if( MINGW )
   target_link_libraries(tblgen imagehlp psapi)
 endif( MINGW )

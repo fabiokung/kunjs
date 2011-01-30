@@ -37,9 +37,7 @@ STATISTIC(NumUnreach, "Number of noreturn calls optimized");
 namespace {
   struct PruneEH : public CallGraphSCCPass {
     static char ID; // Pass identification, replacement for typeid
-    PruneEH() : CallGraphSCCPass(ID) {
-      initializePruneEHPass(*PassRegistry::getPassRegistry());
-    }
+    PruneEH() : CallGraphSCCPass(ID) {}
 
     // runOnSCC - Analyze the SCC, performing the transformation if possible.
     bool runOnSCC(CallGraphSCC &SCC);
@@ -50,11 +48,8 @@ namespace {
 }
 
 char PruneEH::ID = 0;
-INITIALIZE_PASS_BEGIN(PruneEH, "prune-eh",
-                "Remove unused exception handling info", false, false)
-INITIALIZE_AG_DEPENDENCY(CallGraph)
-INITIALIZE_PASS_END(PruneEH, "prune-eh",
-                "Remove unused exception handling info", false, false)
+INITIALIZE_PASS(PruneEH, "prune-eh",
+                "Remove unused exception handling info", false, false);
 
 Pass *llvm::createPruneEHPass() { return new PruneEH(); }
 

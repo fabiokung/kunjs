@@ -106,7 +106,6 @@ enum PassDebuggingString {
   ON_BASICBLOCK_MSG, // "'  on BasicBlock '" + PassName + "'...\n"
   ON_FUNCTION_MSG, // "' on Function '" + FunctionName + "'...\n"
   ON_MODULE_MSG, // "' on Module '" + ModuleName + "'...\n"
-  ON_REGION_MSG, // " 'on Region ...\n'"
   ON_LOOP_MSG, // " 'on Loop ...\n'"
   ON_CG_MSG // "' on Call Graph ...\n'"
 };  
@@ -185,10 +184,10 @@ public:
   void schedulePass(Pass *P);
 
   /// Set pass P as the last user of the given analysis passes.
-  void setLastUser(const SmallVectorImpl<Pass *> &AnalysisPasses, Pass *P);
+  void setLastUser(SmallVector<Pass *, 12> &AnalysisPasses, Pass *P);
 
   /// Collect passes whose last user is P
-  void collectLastUses(SmallVectorImpl<Pass *> &LastUses, Pass *P);
+  void collectLastUses(SmallVector<Pass *, 12> &LastUses, Pass *P);
 
   /// Find the pass that implements Analysis AID. Search immutable
   /// passes and all pass managers. If desired pass is not found
@@ -206,7 +205,7 @@ public:
     ImmutablePasses.push_back(P);
   }
 
-  inline SmallVectorImpl<ImmutablePass *>& getImmutablePasses() {
+  inline SmallVector<ImmutablePass *, 8>& getImmutablePasses() {
     return ImmutablePasses;
   }
 
@@ -314,8 +313,8 @@ public:
   /// Populate RequiredPasses with analysis pass that are required by
   /// pass P and are available. Populate ReqPassNotAvailable with analysis
   /// pass that are required by pass P but are not available.
-  void collectRequiredAnalysis(SmallVectorImpl<Pass *> &RequiredPasses,
-                               SmallVectorImpl<AnalysisID> &ReqPassNotAvailable,
+  void collectRequiredAnalysis(SmallVector<Pass *, 8> &RequiredPasses,
+                               SmallVector<AnalysisID, 8> &ReqPassNotAvailable,
                                Pass *P);
 
   /// All Required analyses should be available to the pass as it runs!  Here

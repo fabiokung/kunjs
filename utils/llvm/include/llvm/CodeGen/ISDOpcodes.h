@@ -107,13 +107,6 @@ namespace ISD {
     // and returns an outchain.
     EH_SJLJ_LONGJMP,
 
-    // OUTCHAIN = EH_SJLJ_DISPATCHSETUP(INCHAIN, context)
-    // This corresponds to the eh.sjlj.dispatchsetup intrinsic. It takes an
-    // input chain and a pointer to the sjlj function context as inputs and
-    // returns an outchain. By default, this does nothing. Targets can lower
-    // this to unwind setup code if needed.
-    EH_SJLJ_DISPATCHSETUP,
-
     // TargetConstant* - Like Constant*, but the DAG does not do any folding,
     // simplification, or lowering of the constant. They are used for constants
     // which are known to fit in the immediate fields of their users, or for
@@ -274,11 +267,11 @@ namespace ISD {
     /// IDX, which must be a multiple of the result vector length.
     EXTRACT_SUBVECTOR,
 
-    /// VECTOR_SHUFFLE(VEC1, VEC2) - Returns a vector, of the same type as
+    /// VECTOR_SHUFFLE(VEC1, VEC2) - Returns a vector, of the same type as 
     /// VEC1/VEC2.  A VECTOR_SHUFFLE node also contains an array of constant int
     /// values that indicate which value (or undef) each result element will
-    /// get.  These constant ints are accessible through the
-    /// ShuffleVectorSDNode class.  This is quite similar to the Altivec
+    /// get.  These constant ints are accessible through the 
+    /// ShuffleVectorSDNode class.  This is quite similar to the Altivec 
     /// 'vperm' instruction, except that the indices must be constants and are
     /// in terms of the element size of VEC1/VEC2, not in terms of bytes.
     VECTOR_SHUFFLE,
@@ -399,14 +392,14 @@ namespace ISD {
     /// X = FP_EXTEND(Y) - Extend a smaller FP type into a larger FP type.
     FP_EXTEND,
 
-    // BITCAST - This operator converts between integer, vector and FP
+    // BIT_CONVERT - This operator converts between integer, vector and FP
     // values, as if the value was stored to memory with one type and loaded
     // from the same address with the other type (or equivalently for vector
     // format conversions, etc).  The source and result are required to have
     // the same bit size (e.g.  f32 <-> i32).  This can also be used for
     // int-to-int or fp-to-fp conversions, but that is a noop, deleted by
     // getNode().
-    BITCAST,
+    BIT_CONVERT,
 
     // CONVERT_RNDSAT - This operator is used to support various conversions
     // between various types (float, signed, unsigned and vectors of those
@@ -532,7 +525,7 @@ namespace ISD {
     // SRCVALUE - This is a node type that holds a Value* that is used to
     // make reference to a value in the LLVM IR.
     SRCVALUE,
-
+    
     // MDNODE_SDNODE - This is a node that holdes an MDNode*, which is used to
     // reference metadata in the IR.
     MDNODE_SDNODE,

@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/MC/MachObjectWriter.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCAssembler.h"
@@ -17,8 +18,8 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCMachOSymbolFlags.h"
 #include "llvm/MC/MCValue.h"
-#include "llvm/Object/MachOFormat.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachO.h"
 #include "llvm/Target/TargetAsmBackend.h"
 
 // FIXME: Gross.
@@ -26,25 +27,17 @@
 
 #include <vector>
 using namespace llvm;
-using namespace llvm::object;
 
-// FIXME: this has been copied from (or to) X86AsmBackend.cpp
 static unsigned getFixupKindLog2Size(unsigned Kind) {
   switch (Kind) {
-  // FIXME: Until ARM has it's own relocation stuff spun off, it comes
-  // through here and we don't want it to puke all over. Any reasonable
-  // values will only come when ARM relocation support gets added, at which
-  // point this will be X86 only again and the llvm_unreachable can be
-  // re-enabled.
-  default: return 0;// llvm_unreachable("invalid fixup kind!");
-  case FK_PCRel_1:
+  default: llvm_unreachable("invalid fixup kind!");
+  case X86::reloc_pcrel_1byte:
   case FK_Data_1: return 0;
-  case FK_PCRel_2:
+  case X86::reloc_pcrel_2byte:
   case FK_Data_2: return 1;
-  case FK_PCRel_4:
+  case X86::reloc_pcrel_4byte:
   case X86::reloc_riprel_4byte:
   case X86::reloc_riprel_4byte_movq_load:
-  case X86::reloc_signed_4byte:
   case FK_Data_4: return 2;
   case FK_Data_8: return 3;
   }
@@ -54,9 +47,9 @@ static bool isFixupKindPCRel(unsigned Kind) {
   switch (Kind) {
   default:
     return false;
-  case FK_PCRel_1:
-  case FK_PCRel_2:
-  case FK_PCRel_4:
+  case X86::reloc_pcrel_1byte:
+  case X86::reloc_pcrel_2byte:
+  case X86::reloc_pcrel_4byte:
   case X86::reloc_riprel_4byte:
   case X86::reloc_riprel_4byte_movq_load:
     return true;
@@ -82,89 +75,96 @@ static bool doesSymbolRequireExternRelocation(MCSymbolData *SD) {
   return false;
 }
 
-static bool isScatteredFixupFullyResolved(const MCAssembler &Asm,
-                                          const MCValue Target,
-                                          const MCSymbolData *BaseSymbol) {
-  // The effective fixup address is
-  //     addr(atom(A)) + offset(A)
-  //   - addr(atom(B)) - offset(B)
-  //   - addr(BaseSymbol) + <fixup offset from base symbol>
-  // and the offsets are not relocatable, so the fixup is fully resolved when
-  //  addr(atom(A)) - addr(atom(B)) - addr(BaseSymbol) == 0.
-  //
-  // Note that "false" is almost always conservatively correct (it means we emit
-  // a relocation which is unnecessary), except when it would force us to emit a
-  // relocation which the target cannot encode.
-
-  const MCSymbolData *A_Base = 0, *B_Base = 0;
-  if (const MCSymbolRefExpr *A = Target.getSymA()) {
-    // Modified symbol references cannot be resolved.
-    if (A->getKind() != MCSymbolRefExpr::VK_None)
-      return false;
-
-    A_Base = Asm.getAtom(&Asm.getSymbolData(A->getSymbol()));
-    if (!A_Base)
-      return false;
-  }
-
-  if (const MCSymbolRefExpr *B = Target.getSymB()) {
-    // Modified symbol references cannot be resolved.
-    if (B->getKind() != MCSymbolRefExpr::VK_None)
-      return false;
-
-    B_Base = Asm.getAtom(&Asm.getSymbolData(B->getSymbol()));
-    if (!B_Base)
-      return false;
-  }
-
-  // If there is no base, A and B have to be the same atom for this fixup to be
-  // fully resolved.
-  if (!BaseSymbol)
-    return A_Base == B_Base;
-
-  // Otherwise, B must be missing and A must be the base.
-  return !B_Base && BaseSymbol == A_Base;
-}
-
-static bool isScatteredFixupFullyResolvedSimple(const MCAssembler &Asm,
-                                                const MCValue Target,
-                                                const MCSection *BaseSection) {
-  // The effective fixup address is
-  //     addr(atom(A)) + offset(A)
-  //   - addr(atom(B)) - offset(B)
-  //   - addr(<base symbol>) + <fixup offset from base symbol>
-  // and the offsets are not relocatable, so the fixup is fully resolved when
-  //  addr(atom(A)) - addr(atom(B)) - addr(<base symbol>)) == 0.
-  //
-  // The simple (Darwin, except on x86_64) way of dealing with this was to
-  // assume that any reference to a temporary symbol *must* be a temporary
-  // symbol in the same atom, unless the sections differ. Therefore, any PCrel
-  // relocation to a temporary symbol (in the same section) is fully
-  // resolved. This also works in conjunction with absolutized .set, which
-  // requires the compiler to use .set to absolutize the differences between
-  // symbols which the compiler knows to be assembly time constants, so we don't
-  // need to worry about considering symbol differences fully resolved.
-
-  // Non-relative fixups are only resolved if constant.
-  if (!BaseSection)
-    return Target.isAbsolute();
-
-  // Otherwise, relative fixups are only resolved if not a difference and the
-  // target is a temporary in the same section.
-  if (Target.isAbsolute() || Target.getSymB())
-    return false;
-
-  const MCSymbol *A = &Target.getSymA()->getSymbol();
-  if (!A->isTemporary() || !A->isInSection() ||
-      &A->getSection() != BaseSection)
-    return false;
-
-  return true;
-}
-
 namespace {
 
-class MachObjectWriter : public MCObjectWriter {
+class MachObjectWriterImpl {
+  // See <mach-o/loader.h>.
+  enum {
+    Header_Magic32 = 0xFEEDFACE,
+    Header_Magic64 = 0xFEEDFACF
+  };
+
+  enum {
+    Header32Size = 28,
+    Header64Size = 32,
+    SegmentLoadCommand32Size = 56,
+    SegmentLoadCommand64Size = 72,
+    Section32Size = 68,
+    Section64Size = 80,
+    SymtabLoadCommandSize = 24,
+    DysymtabLoadCommandSize = 80,
+    Nlist32Size = 12,
+    Nlist64Size = 16,
+    RelocationInfoSize = 8
+  };
+
+  enum HeaderFileType {
+    HFT_Object = 0x1
+  };
+
+  enum HeaderFlags {
+    HF_SubsectionsViaSymbols = 0x2000
+  };
+
+  enum LoadCommandType {
+    LCT_Segment = 0x1,
+    LCT_Symtab = 0x2,
+    LCT_Dysymtab = 0xb,
+    LCT_Segment64 = 0x19
+  };
+
+  // See <mach-o/nlist.h>.
+  enum SymbolTypeType {
+    STT_Undefined = 0x00,
+    STT_Absolute  = 0x02,
+    STT_Section   = 0x0e
+  };
+
+  enum SymbolTypeFlags {
+    // If any of these bits are set, then the entry is a stab entry number (see
+    // <mach-o/stab.h>. Otherwise the other masks apply.
+    STF_StabsEntryMask = 0xe0,
+
+    STF_TypeMask       = 0x0e,
+    STF_External       = 0x01,
+    STF_PrivateExtern  = 0x10
+  };
+
+  /// IndirectSymbolFlags - Flags for encoding special values in the indirect
+  /// symbol entry.
+  enum IndirectSymbolFlags {
+    ISF_Local    = 0x80000000,
+    ISF_Absolute = 0x40000000
+  };
+
+  /// RelocationFlags - Special flags for addresses.
+  enum RelocationFlags {
+    RF_Scattered = 0x80000000
+  };
+
+  enum RelocationInfoType {
+    RIT_Vanilla             = 0,
+    RIT_Pair                = 1,
+    RIT_Difference          = 2,
+    RIT_PreboundLazyPointer = 3,
+    RIT_LocalDifference     = 4,
+    RIT_TLV                 = 5
+  };
+
+  /// X86_64 uses its own relocation types.
+  enum RelocationInfoTypeX86_64 {
+    RIT_X86_64_Unsigned   = 0,
+    RIT_X86_64_Signed     = 1,
+    RIT_X86_64_Branch     = 2,
+    RIT_X86_64_GOTLoad    = 3,
+    RIT_X86_64_GOT        = 4,
+    RIT_X86_64_Subtractor = 5,
+    RIT_X86_64_Signed1    = 6,
+    RIT_X86_64_Signed2    = 7,
+    RIT_X86_64_Signed4    = 8,
+    RIT_X86_64_TLV        = 9
+  };
+
   /// MachSymbolData - Helper struct for containing some precomputed information
   /// on symbols.
   struct MachSymbolData {
@@ -182,8 +182,13 @@ class MachObjectWriter : public MCObjectWriter {
   /// @name Relocation Data
   /// @{
 
+  struct MachRelocationEntry {
+    uint32_t Word0;
+    uint32_t Word1;
+  };
+
   llvm::DenseMap<const MCSectionData*,
-                 std::vector<macho::RelocationEntry> > Relocations;
+                 std::vector<MachRelocationEntry> > Relocations;
   llvm::DenseMap<const MCSectionData*, unsigned> IndirectSymBase;
 
   /// @}
@@ -197,17 +202,24 @@ class MachObjectWriter : public MCObjectWriter {
 
   /// @}
 
+  MachObjectWriter *Writer;
+
+  raw_ostream &OS;
+
   unsigned Is64Bit : 1;
 
-  uint32_t CPUType;
-  uint32_t CPUSubtype;
-
 public:
-  MachObjectWriter(raw_ostream &_OS,
-                   bool _Is64Bit, uint32_t _CPUType, uint32_t _CPUSubtype,
-                   bool _IsLittleEndian)
-    : MCObjectWriter(_OS, _IsLittleEndian),
-      Is64Bit(_Is64Bit), CPUType(_CPUType), CPUSubtype(_CPUSubtype) {
+  MachObjectWriterImpl(MachObjectWriter *_Writer, bool _Is64Bit)
+    : Writer(_Writer), OS(Writer->getStream()), Is64Bit(_Is64Bit) {
+  }
+
+  void Write8(uint8_t Value) { Writer->Write8(Value); }
+  void Write16(uint16_t Value) { Writer->Write16(Value); }
+  void Write32(uint32_t Value) { Writer->Write32(Value); }
+  void Write64(uint64_t Value) { Writer->Write64(Value); }
+  void WriteZeros(unsigned N) { Writer->WriteZeros(N); }
+  void WriteBytes(StringRef Str, unsigned ZeroFillSize = 0) {
+    Writer->WriteBytes(Str, ZeroFillSize);
   }
 
   void WriteHeader(unsigned NumLoadCommands, unsigned LoadCommandsSize,
@@ -215,7 +227,7 @@ public:
     uint32_t Flags = 0;
 
     if (SubsectionsViaSymbols)
-      Flags |= macho::HF_SubsectionsViaSymbols;
+      Flags |= HF_SubsectionsViaSymbols;
 
     // struct mach_header (28 bytes) or
     // struct mach_header_64 (32 bytes)
@@ -223,20 +235,21 @@ public:
     uint64_t Start = OS.tell();
     (void) Start;
 
-    Write32(Is64Bit ? macho::HM_Object64 : macho::HM_Object32);
+    Write32(Is64Bit ? Header_Magic64 : Header_Magic32);
 
-    Write32(CPUType);
-    Write32(CPUSubtype);
-
-    Write32(macho::HFT_Object);
-    Write32(NumLoadCommands);
+    // FIXME: Support cputype.
+    Write32(Is64Bit ? MachO::CPUTypeX86_64 : MachO::CPUTypeI386);
+    // FIXME: Support cpusubtype.
+    Write32(MachO::CPUSubType_I386_ALL);
+    Write32(HFT_Object);
+    Write32(NumLoadCommands);    // Object files have a single load command, the
+                                 // segment.
     Write32(LoadCommandsSize);
     Write32(Flags);
     if (Is64Bit)
       Write32(0); // reserved
 
-    assert(OS.tell() - Start == Is64Bit ? 
-           macho::Header64Size : macho::Header32Size);
+    assert(OS.tell() - Start == Is64Bit ? Header64Size : Header32Size);
   }
 
   /// WriteSegmentLoadCommand - Write a segment load command.
@@ -253,12 +266,11 @@ public:
     uint64_t Start = OS.tell();
     (void) Start;
 
-    unsigned SegmentLoadCommandSize = Is64Bit ? macho::SegmentLoadCommand64Size:
-      macho::SegmentLoadCommand32Size;
-    Write32(Is64Bit ? macho::LCT_Segment64 : macho::LCT_Segment);
+    unsigned SegmentLoadCommandSize = Is64Bit ? SegmentLoadCommand64Size :
+      SegmentLoadCommand32Size;
+    Write32(Is64Bit ? LCT_Segment64 : LCT_Segment);
     Write32(SegmentLoadCommandSize +
-            NumSections * (Is64Bit ? macho::Section64Size :
-                           macho::Section32Size));
+            NumSections * (Is64Bit ? Section64Size : Section32Size));
 
     WriteBytes("", 16);
     if (Is64Bit) {
@@ -286,7 +298,7 @@ public:
     uint64_t SectionSize = Layout.getSectionSize(&SD);
 
     // The offset is unused for virtual sections.
-    if (SD.getSection().isVirtualSection()) {
+    if (Asm.getBackend().isVirtualSection(SD.getSection())) {
       assert(Layout.getSectionFileSize(&SD) == 0 && "Invalid file size!");
       FileOffset = 0;
     }
@@ -323,8 +335,7 @@ public:
     if (Is64Bit)
       Write32(0); // reserved3
 
-    assert(OS.tell() - Start == Is64Bit ? macho::Section64Size :
-           macho::Section32Size);
+    assert(OS.tell() - Start == Is64Bit ? Section64Size : Section32Size);
   }
 
   void WriteSymtabLoadCommand(uint32_t SymbolOffset, uint32_t NumSymbols,
@@ -335,14 +346,14 @@ public:
     uint64_t Start = OS.tell();
     (void) Start;
 
-    Write32(macho::LCT_Symtab);
-    Write32(macho::SymtabLoadCommandSize);
+    Write32(LCT_Symtab);
+    Write32(SymtabLoadCommandSize);
     Write32(SymbolOffset);
     Write32(NumSymbols);
     Write32(StringTableOffset);
     Write32(StringTableSize);
 
-    assert(OS.tell() - Start == macho::SymtabLoadCommandSize);
+    assert(OS.tell() - Start == SymtabLoadCommandSize);
   }
 
   void WriteDysymtabLoadCommand(uint32_t FirstLocalSymbol,
@@ -358,8 +369,8 @@ public:
     uint64_t Start = OS.tell();
     (void) Start;
 
-    Write32(macho::LCT_Dysymtab);
-    Write32(macho::DysymtabLoadCommandSize);
+    Write32(LCT_Dysymtab);
+    Write32(DysymtabLoadCommandSize);
     Write32(FirstLocalSymbol);
     Write32(NumLocalSymbols);
     Write32(FirstExternalSymbol);
@@ -379,7 +390,7 @@ public:
     Write32(0); // locreloff
     Write32(0); // nlocrel
 
-    assert(OS.tell() - Start == macho::DysymtabLoadCommandSize);
+    assert(OS.tell() - Start == DysymtabLoadCommandSize);
   }
 
   void WriteNlist(MachSymbolData &MSD, const MCAsmLayout &Layout) {
@@ -393,20 +404,20 @@ public:
     //
     // FIXME: Are the prebound or indirect fields possible here?
     if (Symbol.isUndefined())
-      Type = macho::STT_Undefined;
+      Type = STT_Undefined;
     else if (Symbol.isAbsolute())
-      Type = macho::STT_Absolute;
+      Type = STT_Absolute;
     else
-      Type = macho::STT_Section;
+      Type = STT_Section;
 
     // FIXME: Set STAB bits.
 
     if (Data.isPrivateExtern())
-      Type |= macho::STF_PrivateExtern;
+      Type |= STF_PrivateExtern;
 
     // Set external bit.
     if (Data.isExternal() || Symbol.isUndefined())
-      Type |= macho::STF_External;
+      Type |= STF_External;
 
     // Compute the symbol address.
     if (Symbol.isDefined()) {
@@ -492,7 +503,7 @@ public:
 
     if (Target.isAbsolute()) { // constant
       // SymbolNum of 0 indicates the absolute section.
-      Type = macho::RIT_X86_64_Unsigned;
+      Type = RIT_X86_64_Unsigned;
       Index = 0;
 
       // FIXME: I believe this is broken, I don't think the linker can
@@ -502,16 +513,16 @@ public:
       // yet).
       if (IsPCRel) {
         IsExtern = 1;
-        Type = macho::RIT_X86_64_Branch;
+        Type = RIT_X86_64_Branch;
       }
     } else if (Target.getSymB()) { // A - B + constant
       const MCSymbol *A = &Target.getSymA()->getSymbol();
       MCSymbolData &A_SD = Asm.getSymbolData(*A);
-      const MCSymbolData *A_Base = Asm.getAtom(&A_SD);
+      const MCSymbolData *A_Base = Asm.getAtom(Layout, &A_SD);
 
       const MCSymbol *B = &Target.getSymB()->getSymbol();
       MCSymbolData &B_SD = Asm.getSymbolData(*B);
-      const MCSymbolData *B_Base = Asm.getAtom(&B_SD);
+      const MCSymbolData *B_Base = Asm.getAtom(Layout, &B_SD);
 
       // Neither symbol can be modified.
       if (Target.getSymA()->getKind() != MCSymbolRefExpr::VK_None ||
@@ -523,35 +534,25 @@ public:
       if (IsPCRel)
         report_fatal_error("unsupported pc-relative relocation of difference");
 
-      // The support for the situation where one or both of the symbols would
-      // require a local relocation is handled just like if the symbols were
-      // external.  This is certainly used in the case of debug sections where
-      // the section has only temporary symbols and thus the symbols don't have
-      // base symbols.  This is encoded using the section ordinal and
-      // non-extern relocation entries.
+      // We don't currently support any situation where one or both of the
+      // symbols would require a local relocation. This is almost certainly
+      // unused and may not be possible to encode correctly.
+      if (!A_Base || !B_Base)
+        report_fatal_error("unsupported local relocations in difference");
 
       // Darwin 'as' doesn't emit correct relocations for this (it ends up with
-      // a single SIGNED relocation); reject it for now.  Except the case where
-      // both symbols don't have a base, equal but both NULL.
-      if (A_Base == B_Base && A_Base)
+      // a single SIGNED relocation); reject it for now.
+      if (A_Base == B_Base)
         report_fatal_error("unsupported relocation with identical base");
 
-      Value += Layout.getSymbolAddress(&A_SD) -
-               (A_Base == NULL ? 0 : Layout.getSymbolAddress(A_Base));
-      Value -= Layout.getSymbolAddress(&B_SD) -
-               (B_Base == NULL ? 0 : Layout.getSymbolAddress(B_Base));
+      Value += Layout.getSymbolAddress(&A_SD) - Layout.getSymbolAddress(A_Base);
+      Value -= Layout.getSymbolAddress(&B_SD) - Layout.getSymbolAddress(B_Base);
 
-      if (A_Base) {
-        Index = A_Base->getIndex();
-        IsExtern = 1;
-      }
-      else {
-        Index = A_SD.getFragment()->getParent()->getOrdinal() + 1;
-        IsExtern = 0;
-      }
-      Type = macho::RIT_X86_64_Unsigned;
+      Index = A_Base->getIndex();
+      IsExtern = 1;
+      Type = RIT_X86_64_Unsigned;
 
-      macho::RelocationEntry MRE;
+      MachRelocationEntry MRE;
       MRE.Word0 = FixupOffset;
       MRE.Word1 = ((Index     <<  0) |
                    (IsPCRel   << 24) |
@@ -560,19 +561,13 @@ public:
                    (Type      << 28));
       Relocations[Fragment->getParent()].push_back(MRE);
 
-      if (B_Base) {
-        Index = B_Base->getIndex();
-        IsExtern = 1;
-      }
-      else {
-        Index = B_SD.getFragment()->getParent()->getOrdinal() + 1;
-        IsExtern = 0;
-      }
-      Type = macho::RIT_X86_64_Subtractor;
+      Index = B_Base->getIndex();
+      IsExtern = 1;
+      Type = RIT_X86_64_Subtractor;
     } else {
       const MCSymbol *Symbol = &Target.getSymA()->getSymbol();
       MCSymbolData &SD = Asm.getSymbolData(*Symbol);
-      const MCSymbolData *Base = Asm.getAtom(&SD);
+      const MCSymbolData *Base = Asm.getAtom(Layout, &SD);
 
       // Relocations inside debug sections always use local relocations when
       // possible. This seems to be done because the debugger doesn't fully
@@ -616,15 +611,15 @@ public:
             // rewrite the movq to an leaq at link time if the symbol ends up in
             // the same linkage unit.
             if (unsigned(Fixup.getKind()) == X86::reloc_riprel_4byte_movq_load)
-              Type = macho::RIT_X86_64_GOTLoad;
+              Type = RIT_X86_64_GOTLoad;
             else
-              Type = macho::RIT_X86_64_GOT;
+              Type = RIT_X86_64_GOT;
           }  else if (Modifier == MCSymbolRefExpr::VK_TLVP) {
-            Type = macho::RIT_X86_64_TLV;
+            Type = RIT_X86_64_TLV;
           }  else if (Modifier != MCSymbolRefExpr::VK_None) {
             report_fatal_error("unsupported symbol modifier in relocation");
           } else {
-            Type = macho::RIT_X86_64_Signed;
+            Type = RIT_X86_64_Signed;
 
             // The Darwin x86_64 relocation format has a problem where it cannot
             // encode an address (L<foo> + <constant>) which is outside the atom
@@ -641,9 +636,9 @@ public:
             // (the additional bias), but instead appear to just look at the
             // final offset.
             switch (-(Target.getConstant() + (1LL << Log2Size))) {
-            case 1: Type = macho::RIT_X86_64_Signed1; break;
-            case 2: Type = macho::RIT_X86_64_Signed2; break;
-            case 4: Type = macho::RIT_X86_64_Signed4; break;
+            case 1: Type = RIT_X86_64_Signed1; break;
+            case 2: Type = RIT_X86_64_Signed2; break;
+            case 4: Type = RIT_X86_64_Signed4; break;
             }
           }
         } else {
@@ -651,24 +646,24 @@ public:
             report_fatal_error("unsupported symbol modifier in branch "
                               "relocation");
 
-          Type = macho::RIT_X86_64_Branch;
+          Type = RIT_X86_64_Branch;
         }
       } else {
         if (Modifier == MCSymbolRefExpr::VK_GOT) {
-          Type = macho::RIT_X86_64_GOT;
+          Type = RIT_X86_64_GOT;
         } else if (Modifier == MCSymbolRefExpr::VK_GOTPCREL) {
           // GOTPCREL is allowed as a modifier on non-PCrel instructions, in
           // which case all we do is set the PCrel bit in the relocation entry;
           // this is used with exception handling, for example. The source is
           // required to include any necessary offset directly.
-          Type = macho::RIT_X86_64_GOT;
+          Type = RIT_X86_64_GOT;
           IsPCRel = 1;
         } else if (Modifier == MCSymbolRefExpr::VK_TLVP) {
           report_fatal_error("TLVP symbol modifier should have been rip-rel");
         } else if (Modifier != MCSymbolRefExpr::VK_None)
           report_fatal_error("unsupported symbol modifier in relocation");
         else
-          Type = macho::RIT_X86_64_Unsigned;
+          Type = RIT_X86_64_Unsigned;
       }
     }
 
@@ -676,7 +671,7 @@ public:
     FixedValue = Value;
 
     // struct relocation_info (8 bytes)
-    macho::RelocationEntry MRE;
+    MachRelocationEntry MRE;
     MRE.Word0 = FixupOffset;
     MRE.Word1 = ((Index     <<  0) |
                  (IsPCRel   << 24) |
@@ -694,7 +689,7 @@ public:
     uint32_t FixupOffset = Layout.getFragmentOffset(Fragment)+Fixup.getOffset();
     unsigned IsPCRel = isFixupKindPCRel(Fixup.getKind());
     unsigned Log2Size = getFixupKindLog2Size(Fixup.getKind());
-    unsigned Type = macho::RIT_Vanilla;
+    unsigned Type = RIT_Vanilla;
 
     // See <reloc.h>.
     const MCSymbol *A = &Target.getSymA()->getSymbol();
@@ -719,29 +714,28 @@ public:
       // Note that there is no longer any semantic difference between these two
       // relocation types from the linkers point of view, this is done solely
       // for pedantic compatibility with 'as'.
-      Type = A_SD->isExternal() ? macho::RIT_Difference :
-        macho::RIT_LocalDifference;
+      Type = A_SD->isExternal() ? RIT_Difference : RIT_LocalDifference;
       Value2 = Layout.getSymbolAddress(B_SD);
     }
 
     // Relocations are written out in reverse order, so the PAIR comes first.
-    if (Type == macho::RIT_Difference || Type == macho::RIT_LocalDifference) {
-      macho::RelocationEntry MRE;
+    if (Type == RIT_Difference || Type == RIT_LocalDifference) {
+      MachRelocationEntry MRE;
       MRE.Word0 = ((0         <<  0) |
-                   (macho::RIT_Pair  << 24) |
+                   (RIT_Pair  << 24) |
                    (Log2Size  << 28) |
                    (IsPCRel   << 30) |
-                   macho::RF_Scattered);
+                   RF_Scattered);
       MRE.Word1 = Value2;
       Relocations[Fragment->getParent()].push_back(MRE);
     }
 
-    macho::RelocationEntry MRE;
+    MachRelocationEntry MRE;
     MRE.Word0 = ((FixupOffset <<  0) |
                  (Type        << 24) |
                  (Log2Size    << 28) |
                  (IsPCRel     << 30) |
-                 macho::RF_Scattered);
+                 RF_Scattered);
     MRE.Word1 = Value;
     Relocations[Fragment->getParent()].push_back(MRE);
   }
@@ -779,18 +773,18 @@ public:
     } else {
       FixedValue = 0;
     }
-
+    
     // struct relocation_info (8 bytes)
-    macho::RelocationEntry MRE;
+    MachRelocationEntry MRE;
     MRE.Word0 = Value;
     MRE.Word1 = ((Index     <<  0) |
                  (IsPCRel   << 24) |
                  (Log2Size  << 25) |
                  (1         << 27) | // Extern
-                 (macho::RIT_TLV   << 28)); // Type
+                 (RIT_TLV   << 28)); // Type
     Relocations[Fragment->getParent()].push_back(MRE);
   }
-
+  
   void RecordRelocation(const MCAssembler &Asm, const MCAsmLayout &Layout,
                         const MCFragment *Fragment, const MCFixup &Fixup,
                         MCValue Target, uint64_t &FixedValue) {
@@ -803,12 +797,11 @@ public:
     unsigned Log2Size = getFixupKindLog2Size(Fixup.getKind());
 
     // If this is a 32-bit TLVP reloc it's handled a bit differently.
-    if (Target.getSymA() &&
-        Target.getSymA()->getKind() == MCSymbolRefExpr::VK_TLVP) {
+    if (Target.getSymA()->getKind() == MCSymbolRefExpr::VK_TLVP) {
       RecordTLVPRelocation(Asm, Layout, Fragment, Fixup, Target, FixedValue);
       return;
     }
-
+    
     // If this is a difference or a defined symbol plus an offset, then we need
     // a scattered relocation entry.
     // Differences always require scattered relocations.
@@ -841,7 +834,7 @@ public:
       //
       // FIXME: Currently, these are never generated (see code below). I cannot
       // find a case where they are actually emitted.
-      Type = macho::RIT_Vanilla;
+      Type = RIT_Vanilla;
     } else {
       // Check whether we need an external or internal relocation.
       if (doesSymbolRequireExternRelocation(SD)) {
@@ -857,11 +850,11 @@ public:
         Index = SD->getFragment()->getParent()->getOrdinal() + 1;
       }
 
-      Type = macho::RIT_Vanilla;
+      Type = RIT_Vanilla;
     }
 
     // struct relocation_info (8 bytes)
-    macho::RelocationEntry MRE;
+    MachRelocationEntry MRE;
     MRE.Word0 = FixupOffset;
     MRE.Word1 = ((Index     <<  0) |
                  (IsPCRel   << 24) |
@@ -892,7 +885,7 @@ public:
       // Initialize the section indirect symbol base, if necessary.
       if (!IndirectSymBase.count(it->SectionData))
         IndirectSymBase[it->SectionData] = IndirectIndex;
-
+      
       Asm.getOrCreateSymbolData(*it->Symbol);
     }
 
@@ -1044,65 +1037,28 @@ public:
                        UndefinedSymbolData);
   }
 
-
-  bool IsFixupFullyResolved(const MCAssembler &Asm,
-                            const MCValue Target,
-                            bool IsPCRel,
-                            const MCFragment *DF) const {
-    // If we aren't using scattered symbols, the fixup is fully resolved.
-    if (!Asm.getBackend().hasScatteredSymbols())
-      return true;
-
-    // Otherwise, determine whether this value is actually resolved; scattering
-    // may cause atoms to move.
-
-    // Check if we are using the "simple" resolution algorithm (e.g.,
-    // i386).
-    if (!Asm.getBackend().hasReliableSymbolDifference()) {
-      const MCSection *BaseSection = 0;
-      if (IsPCRel)
-        BaseSection = &DF->getParent()->getSection();
-
-      return isScatteredFixupFullyResolvedSimple(Asm, Target, BaseSection);
-    }
-
-    // Otherwise, compute the proper answer as reliably as possible.
-
-    // If this is a PCrel relocation, find the base atom (identified by its
-    // symbol) that the fixup value is relative to.
-    const MCSymbolData *BaseSymbol = 0;
-    if (IsPCRel) {
-      BaseSymbol = DF->getAtom();
-      if (!BaseSymbol)
-        return false;
-    }
-
-    return isScatteredFixupFullyResolved(Asm, Target, BaseSymbol);
-  }
-
-  void WriteObject(MCAssembler &Asm, const MCAsmLayout &Layout) {
+  void WriteObject(const MCAssembler &Asm, const MCAsmLayout &Layout) {
     unsigned NumSections = Asm.size();
 
     // The section data starts after the header, the segment load command (and
     // section headers) and the symbol table.
     unsigned NumLoadCommands = 1;
     uint64_t LoadCommandsSize = Is64Bit ?
-      macho::SegmentLoadCommand64Size + NumSections * macho::Section64Size :
-      macho::SegmentLoadCommand32Size + NumSections * macho::Section32Size;
+      SegmentLoadCommand64Size + NumSections * Section64Size :
+      SegmentLoadCommand32Size + NumSections * Section32Size;
 
     // Add the symbol table load command sizes, if used.
     unsigned NumSymbols = LocalSymbolData.size() + ExternalSymbolData.size() +
       UndefinedSymbolData.size();
     if (NumSymbols) {
       NumLoadCommands += 2;
-      LoadCommandsSize += (macho::SymtabLoadCommandSize +
-                           macho::DysymtabLoadCommandSize);
+      LoadCommandsSize += SymtabLoadCommandSize + DysymtabLoadCommandSize;
     }
 
     // Compute the total size of the section data, as well as its file size and
     // vm size.
-    uint64_t SectionDataStart = (Is64Bit ? macho::Header64Size :
-                                 macho::Header32Size) + LoadCommandsSize;
+    uint64_t SectionDataStart = (Is64Bit ? Header64Size : Header32Size)
+      + LoadCommandsSize;
     uint64_t SectionDataSize = 0;
     uint64_t SectionDataFileSize = 0;
     uint64_t VMSize = 0;
@@ -1115,7 +1071,7 @@ public:
 
       VMSize = std::max(VMSize, Address + Size);
 
-      if (SD.getSection().isVirtualSection())
+      if (Asm.getBackend().isVirtualSection(SD.getSection()))
         continue;
 
       SectionDataSize = std::max(SectionDataSize, Address + Size);
@@ -1138,11 +1094,11 @@ public:
     uint64_t RelocTableEnd = SectionDataStart + SectionDataFileSize;
     for (MCAssembler::const_iterator it = Asm.begin(),
            ie = Asm.end(); it != ie; ++it) {
-      std::vector<macho::RelocationEntry> &Relocs = Relocations[it];
+      std::vector<MachRelocationEntry> &Relocs = Relocations[it];
       unsigned NumRelocs = Relocs.size();
       uint64_t SectionStart = SectionDataStart + Layout.getSectionAddress(it);
       WriteSection(Asm, Layout, *it, SectionStart, RelocTableEnd, NumRelocs);
-      RelocTableEnd += NumRelocs * macho::RelocationInfoSize;
+      RelocTableEnd += NumRelocs * RelocationInfoSize;
     }
 
     // Write the symbol table load command, if used.
@@ -1168,8 +1124,8 @@ public:
 
       // The string table is written after symbol table.
       uint64_t StringTableOffset =
-        SymbolTableOffset + NumSymTabSymbols * (Is64Bit ? macho::Nlist64Size :
-                                                macho::Nlist32Size);
+        SymbolTableOffset + NumSymTabSymbols * (Is64Bit ? Nlist64Size :
+                                                Nlist32Size);
       WriteSymtabLoadCommand(SymbolTableOffset, NumSymTabSymbols,
                              StringTableOffset, StringTable.size());
 
@@ -1182,7 +1138,7 @@ public:
     // Write the actual section data.
     for (MCAssembler::const_iterator it = Asm.begin(),
            ie = Asm.end(); it != ie; ++it)
-      Asm.WriteSectionData(it, Layout, this);
+      Asm.WriteSectionData(it, Layout, Writer);
 
     // Write the extra padding.
     WriteZeros(SectionDataPadding);
@@ -1192,7 +1148,7 @@ public:
            ie = Asm.end(); it != ie; ++it) {
       // Write the section relocation entries, in reverse order to match 'as'
       // (approximately, the exact algorithm is more complicated than this).
-      std::vector<macho::RelocationEntry> &Relocs = Relocations[it];
+      std::vector<MachRelocationEntry> &Relocs = Relocations[it];
       for (unsigned i = 0, e = Relocs.size(); i != e; ++i) {
         Write32(Relocs[e - i - 1].Word0);
         Write32(Relocs[e - i - 1].Word1);
@@ -1213,9 +1169,9 @@ public:
           // If this symbol is defined and internal, mark it as such.
           if (it->Symbol->isDefined() &&
               !Asm.getSymbolData(*it->Symbol).isExternal()) {
-            uint32_t Flags = macho::ISF_Local;
+            uint32_t Flags = ISF_Local;
             if (it->Symbol->isAbsolute())
-              Flags |= macho::ISF_Absolute;
+              Flags |= ISF_Absolute;
             Write32(Flags);
             continue;
           }
@@ -1242,9 +1198,32 @@ public:
 
 }
 
-MCObjectWriter *llvm::createMachObjectWriter(raw_ostream &OS, bool is64Bit,
-                                             uint32_t CPUType,
-                                             uint32_t CPUSubtype,
-                                             bool IsLittleEndian) {
-  return new MachObjectWriter(OS, is64Bit, CPUType, CPUSubtype, IsLittleEndian);
+MachObjectWriter::MachObjectWriter(raw_ostream &OS,
+                                   bool Is64Bit,
+                                   bool IsLittleEndian)
+  : MCObjectWriter(OS, IsLittleEndian)
+{
+  Impl = new MachObjectWriterImpl(this, Is64Bit);
+}
+
+MachObjectWriter::~MachObjectWriter() {
+  delete (MachObjectWriterImpl*) Impl;
+}
+
+void MachObjectWriter::ExecutePostLayoutBinding(MCAssembler &Asm) {
+  ((MachObjectWriterImpl*) Impl)->ExecutePostLayoutBinding(Asm);
+}
+
+void MachObjectWriter::RecordRelocation(const MCAssembler &Asm,
+                                        const MCAsmLayout &Layout,
+                                        const MCFragment *Fragment,
+                                        const MCFixup &Fixup, MCValue Target,
+                                        uint64_t &FixedValue) {
+  ((MachObjectWriterImpl*) Impl)->RecordRelocation(Asm, Layout, Fragment, Fixup,
+                                                   Target, FixedValue);
+}
+
+void MachObjectWriter::WriteObject(const MCAssembler &Asm,
+                                   const MCAsmLayout &Layout) {
+  ((MachObjectWriterImpl*) Impl)->WriteObject(Asm, Layout);
 }

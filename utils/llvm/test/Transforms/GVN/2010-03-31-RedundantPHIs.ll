@@ -1,7 +1,4 @@
-; RUN: opt < %s -basicaa -gvn -S | FileCheck %s
-
-; CHECK-NOT: load
-; CHECK-NOT: phi
+; RUN: opt < %s -gvn -enable-full-load-pre -S | FileCheck %s
 
 define i8* @cat(i8* %s1, ...) nounwind {
 entry:
@@ -32,11 +29,18 @@ bb10:                                             ; preds = %bb8
   br label %bb11
 
 bb11:                                             ; preds = %bb10, %bb9
+; CHECK: bb11:
+; CHECK: phi
+; CHECK-NOT: phi
   br label %bb12
 
 bb12:                                             ; preds = %bb11, %bb6
+; CHECK: bb12:
+; CHECK: phi
+; CHECK-NOT: phi
   br i1 undef, label %bb8, label %bb13
 
 bb13:                                             ; preds = %bb12
+; CHECK: bb13:
   ret i8* undef
 }

@@ -16,7 +16,6 @@
 #include "llvm/Function.h"
 #include "llvm/Instructions.h"
 #include "llvm/Pass.h"
-#include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Transforms/Utils/Local.h"
@@ -39,9 +38,7 @@ namespace {
     
   public:
     static char ID;
-    CorrelatedValuePropagation(): FunctionPass(ID) {
-     initializeCorrelatedValuePropagationPass(*PassRegistry::getPassRegistry());
-    }
+    CorrelatedValuePropagation(): FunctionPass(ID) { }
     
     bool runOnFunction(Function &F);
     
@@ -52,11 +49,8 @@ namespace {
 }
 
 char CorrelatedValuePropagation::ID = 0;
-INITIALIZE_PASS_BEGIN(CorrelatedValuePropagation, "correlated-propagation",
-                "Value Propagation", false, false)
-INITIALIZE_PASS_DEPENDENCY(LazyValueInfo)
-INITIALIZE_PASS_END(CorrelatedValuePropagation, "correlated-propagation",
-                "Value Propagation", false, false)
+INITIALIZE_PASS(CorrelatedValuePropagation, "correlated-propagation",
+                "Value Propagation", false, false);
 
 // Public interface to the Value Propagation pass
 Pass *llvm::createCorrelatedValuePropagationPass() {
@@ -97,13 +91,13 @@ bool CorrelatedValuePropagation::processPHI(PHINode *P) {
     P->setIncomingValue(i, C);
     Changed = true;
   }
-
-  if (Value *V = SimplifyInstruction(P)) {
-    P->replaceAllUsesWith(V);
+  
+  if (Value *ConstVal = P->hasConstantValue()) {
+    P->replaceAllUsesWith(ConstVal);
     P->eraseFromParent();
     Changed = true;
   }
-
+  
   ++NumPhis;
   
   return Changed;
@@ -193,6 +187,11 @@ bool CorrelatedValuePropagation::runOnFunction(Function &F) {
         break;
       }
     }
+    
+    // Propagating correlated values might leave cruft around.
+    // Try to clean it up before we continue.
+    if (BBChanged)
+      SimplifyInstructionsInBlock(FI);
     
     FnChanged |= BBChanged;
   }

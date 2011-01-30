@@ -20,34 +20,14 @@
 #include "llvm/ADT/STLExtras.h"
 
 namespace llvm {
-  class PPCSubtarget;
 
 class PPCFrameInfo: public TargetFrameInfo {
-  const PPCSubtarget &Subtarget;
+  const TargetMachine &TM;
 
 public:
-  PPCFrameInfo(const PPCSubtarget &sti)
-    : TargetFrameInfo(TargetFrameInfo::StackGrowsDown, 16, 0), Subtarget(sti) {
+  PPCFrameInfo(const TargetMachine &tm, bool LP64)
+    : TargetFrameInfo(TargetFrameInfo::StackGrowsDown, 16, 0), TM(tm) {
   }
-
-  void determineFrameLayout(MachineFunction &MF) const;
-
-  /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
-  /// the function.
-  void emitPrologue(MachineFunction &MF) const;
-  void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
-
-  bool hasFP(const MachineFunction &MF) const;
-  void getInitialFrameState(std::vector<MachineMove> &Moves) const;
-
-  void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
-                                            RegScavenger *RS = NULL) const;
-  void processFunctionBeforeFrameFinalized(MachineFunction &MF) const;
-
-  /// targetHandlesStackFrameRounding - Returns true if the target is
-  /// responsible for rounding up the stack frame (probably at emitPrologue
-  /// time).
-  bool targetHandlesStackFrameRounding() const { return true; }
 
   /// getReturnSaveOffset - Return the previous frame offset to save the
   /// return address.
@@ -68,17 +48,17 @@ public:
     // around that does use it, and that needs to continue to work.
     if (isDarwinABI)
       return isPPC64 ? -8U : -4U;
-
+    
     // SVR4 ABI: First slot in the general register save area.
     return isPPC64 ? -8U : -4U;
   }
-
+  
   /// getLinkageSize - Return the size of the PowerPC ABI linkage area.
   ///
   static unsigned getLinkageSize(bool isPPC64, bool isDarwinABI) {
     if (isDarwinABI || isPPC64)
       return 6 * (isPPC64 ? 8 : 4);
-
+    
     // SVR4 ABI:
     return 8;
   }
@@ -94,7 +74,7 @@ public:
     // least enough stack space for the caller to store the 8 GPRs.
     if (isDarwinABI || isPPC64)
       return 8 * (isPPC64 ? 8 : 4);
-
+    
     // 32-bit SVR4 ABI:
     // There is no default stack allocated for the 8 first GPR arguments.
     return 0;
@@ -111,9 +91,9 @@ public:
   // With the SVR4 ABI, callee-saved registers have fixed offsets on the stack.
   const SpillSlot *
   getCalleeSavedSpillSlots(unsigned &NumEntries) const {
-    if (Subtarget.isDarwinABI()) {
+    if (TM.getSubtarget<PPCSubtarget>().isDarwinABI()) {
       NumEntries = 1;
-      if (Subtarget.isPPC64()) {
+      if (TM.getSubtarget<PPCSubtarget>().isPPC64()) {
         static const SpillSlot darwin64Offsets = {PPC::X31, -8};
         return &darwin64Offsets;
       } else {
@@ -123,7 +103,7 @@ public:
     }
 
     // Early exit if not using the SVR4 ABI.
-    if (!Subtarget.isSVR4ABI()) {
+    if (!TM.getSubtarget<PPCSubtarget>().isSVR4ABI()) {
       NumEntries = 0;
       return 0;
     }
@@ -303,7 +283,7 @@ public:
       {PPC::V20, -192}
     };
 
-    if (Subtarget.isPPC64()) {
+    if (TM.getSubtarget<PPCSubtarget>().isPPC64()) {
       NumEntries = array_lengthof(Offsets64);
 
       return Offsets64;

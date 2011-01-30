@@ -57,13 +57,19 @@ protected:
   // Allocate raw space for N elements of type T.  If T has a ctor or dtor, we
   // don't want it to be automatically run, so we need to represent the space as
   // something else.  An array of char would work great, but might not be
-  // aligned sufficiently.  Instead we use some number of union instances for
-  // the space, which guarantee maximal alignment.
-  union U {
-    double D;
-    long double LD;
-    long long L;
-    void *P;
+  // aligned sufficiently.  Instead, we either use GCC extensions, or some
+  // number of union instances for the space, which guarantee maximal alignment.
+  struct U {
+#ifdef __GNUC__
+    char X __attribute__((aligned));
+#else
+    union {
+      double D;
+      long double LD;
+      long long L;
+      void *P;
+    } X;
+#endif
   } FirstEl;
   // Space after 'FirstEl' is clobbered, do not add any instance vars after it.
 
@@ -88,7 +94,7 @@ protected:
   }
 
   /// grow_pod - This is an implementation of the grow() method which only works
-  /// on POD-like data types and is out of line to reduce code duplication.
+  /// on POD-like datatypes and is out of line to reduce code duplication.
   void grow_pod(size_t MinSizeInBytes, size_t TSize);
 
 public:
@@ -263,7 +269,7 @@ public:
 template <typename T>
 class SmallVectorImpl : public SmallVectorTemplateBase<T, isPodLike<T>::value> {
   typedef SmallVectorTemplateBase<T, isPodLike<T>::value > SuperClass;
-
+  
   SmallVectorImpl(const SmallVectorImpl&); // DISABLED.
 public:
   typedef typename SuperClass::iterator iterator;

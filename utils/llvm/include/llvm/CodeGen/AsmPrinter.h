@@ -17,7 +17,7 @@
 #define LLVM_CODEGEN_ASMPRINTER_H
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/Support/DebugLoc.h"
 
 namespace llvm {
   class BlockAddress;
@@ -49,7 +49,6 @@ namespace llvm {
   class MCSection;
   class MCStreamer;
   class MCSymbol;
-  class MDNode;
   class DwarfDebug;
   class DwarfException;
   class Mangler;
@@ -433,7 +432,7 @@ namespace llvm {
     mutable unsigned SetCounter;
 
     /// EmitInlineAsm - Emit a blob of inline asm to the output streamer.
-    void EmitInlineAsm(StringRef Str, const MDNode *LocMDNode = 0) const;
+    void EmitInlineAsm(StringRef Str, unsigned LocCookie) const;
 
     /// EmitInlineAsm - This method formats and emits the specified machine
     /// instruction that is an inline asm.

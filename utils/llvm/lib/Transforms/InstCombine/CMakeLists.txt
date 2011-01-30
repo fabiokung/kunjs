@@ -13,3 +13,5 @@ add_llvm_library(LLVMInstCombine
   InstCombineSimplifyDemanded.cpp
   InstCombineVectorOps.cpp
   )
+
+target_link_libraries (LLVMInstCombine LLVMTransformUtils)

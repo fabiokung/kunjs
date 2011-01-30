@@ -1,8 +1,6 @@
 ; PR1318
-; RUN: opt < %s -load=%llvmshlibdir/LLVMHello%shlibext -hello \
+; RUN: opt < %s -load=%llvmlibsdir/LLVMHello%shlibext -hello \
 ; RUN:   -disable-output |& grep Hello
-; REQUIRES: loadable_module
-; FIXME: On Cygming, it might fail without building LLVMHello manually.
 
 @junk = global i32 0
 

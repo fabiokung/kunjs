@@ -81,8 +81,3 @@ define i32 @test12(i32 %i) {
 	%tmp.5 = srem i32 %tmp.1, 2
 	ret i32 %tmp.5
 }
-
-define i32 @test13(i32 %i) {
-	%x = srem i32 %i, %i
-	ret i32 %x
-}

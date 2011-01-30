@@ -25,6 +25,7 @@
 #include "llvm/OperandTraits.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/SmallVector.h"
 #include <vector>
 
 namespace llvm {
@@ -39,8 +40,6 @@ template<class ConstantClass, class TypeClass, class ValType>
 struct ConstantCreator;
 template<class ConstantClass, class TypeClass>
 struct ConvertConstantType;
-template<typename T, unsigned N>
-class SmallVector;
 
 //===----------------------------------------------------------------------===//
 /// This is the shared class of boolean and integer constants. This class 
@@ -266,8 +265,8 @@ public:
   inline const APFloat& getValueAPF() const { return Val; }
 
   /// isNullValue - Return true if this is the value that would be returned by
-  /// getNullValue.  For ConstantFP, this is +0.0, but not -0.0.  To handle the
-  /// two the same, use isZero().
+  /// getNullValue.  Don't depend on == for doubles to tell us it's zero, it
+  /// considers -0.0 to be null as well as 0.0.  :(
   virtual bool isNullValue() const;
   
   /// isNegativeZeroValue - Return true if the value is what would be returned 

@@ -85,11 +85,9 @@ static CallInst *ReplaceCallWith(const char *NewFn, CallInst *CI,
 }
 
 // VisualStudio defines setjmp as _setjmp
-#if defined(_MSC_VER) && defined(setjmp) && \
-                         !defined(setjmp_undefined_for_msvc)
-#  pragma push_macro("setjmp")
-#  undef setjmp
-#  define setjmp_undefined_for_msvc
+#if defined(_MSC_VER) && defined(setjmp)
+#define setjmp_undefined_for_visual_studio
+#undef setjmp
 #endif
 
 void IntrinsicLowering::AddPrototypes(Module &M) {

@@ -88,8 +88,6 @@ class ieee_double {};
 class x86_fp80 {};
 class fp128 {};
 class ppc_fp128 {};
-// X86 MMX.
-class x86_mmx {};
 }  // namespace types
 
 // LLVM doesn't have const or volatile types.
@@ -220,10 +218,6 @@ public:
 template<bool cross> class TypeBuilder<types::ppc_fp128, cross> {
 public:
   static const Type *get(LLVMContext& C) { return Type::getPPC_FP128Ty(C); }
-};
-template<bool cross> class TypeBuilder<types::x86_mmx, cross> {
-public:
-  static const Type *get(LLVMContext& C) { return Type::getX86_MMXTy(C); }
 };
 
 template<bool cross> class TypeBuilder<void, cross> {

@@ -398,10 +398,25 @@ bool Instruction::isSafeToSpeculativelyExecute() const {
     return Op && !Op->isNullValue() && !Op->isAllOnesValue();
   }
   case Load: {
-    const LoadInst *LI = cast<LoadInst>(this);
-    if (LI->isVolatile())
+    if (cast<LoadInst>(this)->isVolatile())
       return false;
-    return LI->getPointerOperand()->isDereferenceablePointer();
+    // Note that it is not safe to speculate into a malloc'd region because
+    // malloc may return null.
+    // It's also not safe to follow a bitcast, for example:
+    //   bitcast i8* (alloca i8) to i32*
+    // would result in a 4-byte load from a 1-byte alloca.
+    Value *Op0 = getOperand(0);
+    if (GEPOperator *GEP = dyn_cast<GEPOperator>(Op0)) {
+      // TODO: it's safe to do this for any GEP with constant indices that
+      // compute inside the allocated type, but not for any inbounds gep.
+      if (GEP->hasAllZeroIndices())
+        Op0 = GEP->getPointerOperand();
+    }
+    if (isa<AllocaInst>(Op0))
+      return true;
+    if (GlobalVariable *GV = dyn_cast<GlobalVariable>(getOperand(0)))
+      return !GV->hasExternalWeakLinkage();
+    return false;
   }
   case Call:
     return false; // The called function could have undefined behavior or

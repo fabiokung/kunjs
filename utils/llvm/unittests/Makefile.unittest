@@ -35,11 +35,9 @@ endif
 TESTLIBS = -lGoogleTest -lUnitTestMain
 
 ifeq ($(ENABLE_SHARED), 1)
-  ifneq (,$(RPATH))
-    # Add the absolute path to the dynamic library.  This is ok because
-    # we'll never install unittests.
-    LD.Flags += $(RPATH) -Wl,$(SharedLibDir)
-  endif
+  # Add the absolute path to the dynamic library.  This is ok because
+  # we'll never install unittests.
+  LD.Flags += $(RPATH) -Wl,$(SharedLibDir)
   # Also set {DYLD,LD}_LIBRARY_PATH because OSX ignores the rpath most
   # of the time.
   Run.Shared := $(SHLIBPATH_VAR)="$(SharedLibDir)$${$(SHLIBPATH_VAR):+:}$$$(SHLIBPATH_VAR)"

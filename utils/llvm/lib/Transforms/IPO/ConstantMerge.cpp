@@ -33,9 +33,7 @@ STATISTIC(NumMerged, "Number of global constants merged");
 namespace {
   struct ConstantMerge : public ModulePass {
     static char ID; // Pass identification, replacement for typeid
-    ConstantMerge() : ModulePass(ID) {
-      initializeConstantMergePass(*PassRegistry::getPassRegistry());
-    }
+    ConstantMerge() : ModulePass(ID) {}
 
     // run - For this pass, process all of the globals in the module,
     // eliminating duplicate constants.
@@ -46,7 +44,7 @@ namespace {
 
 char ConstantMerge::ID = 0;
 INITIALIZE_PASS(ConstantMerge, "constmerge",
-                "Merge Duplicate Global Constants", false, false)
+                "Merge Duplicate Global Constants", false, false);
 
 ModulePass *llvm::createConstantMergePass() { return new ConstantMerge(); }
 

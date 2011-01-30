@@ -78,7 +78,7 @@
   const char*             name;
 
 #define INSTRUCTION_IDS               \
-  const InstrUID *instructionIDs;
+  InstrUID*  instructionIDs;
 
 #include "X86DisassemblerDecoderCommon.h"
 

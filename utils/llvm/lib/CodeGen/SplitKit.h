@@ -1,4 +1,4 @@
-//===-------- SplitKit.cpp - Toolkit for splitting live ranges --*- C++ -*-===//
+//===---------- SplitKit.cpp - Toolkit for splitting live ranges ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -20,21 +20,13 @@ namespace llvm {
 
 class LiveInterval;
 class LiveIntervals;
-class LiveRangeEdit;
 class MachineInstr;
 class MachineLoop;
 class MachineLoopInfo;
 class MachineRegisterInfo;
 class TargetInstrInfo;
-class TargetRegisterInfo;
 class VirtRegMap;
 class VNInfo;
-class raw_ostream;
-
-/// At some point we should just include MachineDominators.h:
-class MachineDominatorTree;
-template <class NodeT> class DomTreeNodeBase;
-typedef DomTreeNodeBase<MachineBasicBlock> MachineDomTreeNode;
 
 /// SplitAnalysis - Analyze a LiveInterval, looking for live range splitting
 /// opportunities.
@@ -76,15 +68,17 @@ public:
   /// split.
   void analyze(const LiveInterval *li);
 
+  /// removeUse - Update statistics by noting that mi no longer uses curli.
+  void removeUse(const MachineInstr *mi);
+
+  const LiveInterval *getCurLI() { return curli_; }
+
   /// clear - clear all data structures so SplitAnalysis is ready to analyze a
   /// new interval.
   void clear();
 
   typedef SmallPtrSet<const MachineBasicBlock*, 16> BlockPtrSet;
   typedef SmallPtrSet<const MachineLoop*, 16> LoopPtrSet;
-
-  // Print a set of blocks with use counts.
-  void print(const BlockPtrSet&, raw_ostream&) const;
 
   // Sets of basic blocks surrounding a machine loop.
   struct LoopBlocks {
@@ -98,9 +92,6 @@ public:
       Exits.clear();
     }
   };
-
-  // Print loop blocks with use counts.
-  void print(const LoopBlocks&, raw_ostream&) const;
 
   // Calculate the block sets surrounding the loop.
   void getLoopBlocks(const MachineLoop *Loop, LoopBlocks &Blocks);
@@ -127,11 +118,6 @@ public:
   /// blocks before the blocks in CriticalExits.
   bool canSplitCriticalExits(const LoopBlocks &Blocks,
                              BlockPtrSet &CriticalExits);
-
-  /// getCriticalPreds - Get the set of loop predecessors with critical edges to
-  /// blocks outside the loop that have curli live in. We don't have to break
-  /// these edges, but they do require special treatment.
-  void getCriticalPreds(const LoopBlocks &Blocks, BlockPtrSet &CriticalPreds);
 
   /// getBestSplitLoop - Return the loop where curli may best be split to a
   /// separate register, or NULL.
@@ -160,13 +146,12 @@ public:
 /// Values in parentli_ may map to any number of openli_ values, including 0.
 class LiveIntervalMap {
   LiveIntervals &lis_;
-  MachineDominatorTree &mdt_;
 
   // The parent interval is never changed.
   const LiveInterval &parentli_;
 
   // The child interval's values are fully contained inside parentli_ values.
-  LiveInterval *li_;
+  LiveInterval &li_;
 
   typedef DenseMap<const VNInfo*, VNInfo*> ValueMap;
 
@@ -176,35 +161,20 @@ class LiveIntervalMap {
   // values not present (unknown/unmapped).
   ValueMap valueMap_;
 
-  typedef std::pair<VNInfo*, MachineDomTreeNode*> LiveOutPair;
-  typedef DenseMap<MachineBasicBlock*,LiveOutPair> LiveOutMap;
+  // extendTo - Find the last li_ value defined in MBB at or before Idx. The
+  // parentli_ is assumed to be live at Idx. Extend the live range to Idx.
+  // Return the found VNInfo, or NULL.
+  VNInfo *extendTo(MachineBasicBlock *MBB, SlotIndex Idx);
 
-  // liveOutCache_ - Map each basic block where li_ is live out to the live-out
-  // value and its defining block. One of these conditions shall be true:
-  //
-  //  1. !liveOutCache_.count(MBB)
-  //  2. liveOutCache_[MBB].second.getNode() == MBB
-  //  3. forall P in preds(MBB): liveOutCache_[P] == liveOutCache_[MBB]
-  //
-  // This is only a cache, the values can be computed as:
-  //
-  //  VNI = li_->getVNInfoAt(lis_.getMBBEndIdx(MBB))
-  //  Node = mbt_[lis_.getMBBFromIndex(VNI->def)]
-  //
-  // The cache is also used as a visiteed set by mapValue().
-  LiveOutMap liveOutCache_;
+  // addSimpleRange - Add a simple range from parentli_ to li_.
+  // ParentVNI must be live in the [Start;End) interval.
+  void addSimpleRange(SlotIndex Start, SlotIndex End, const VNInfo *ParentVNI);
 
 public:
   LiveIntervalMap(LiveIntervals &lis,
-                  MachineDominatorTree &mdt,
-                  const LiveInterval &parentli)
-    : lis_(lis), mdt_(mdt), parentli_(parentli), li_(0) {}
-
-  /// reset - clear all data structures and start a new live interval.
-  void reset(LiveInterval *);
-
-  /// getLI - return the current live interval.
-  LiveInterval *getLI() const { return li_; }
+                  const LiveInterval &parentli,
+                  LiveInterval &li)
+    : lis_(lis), parentli_(parentli), li_(li) {}
 
   /// defValue - define a value in li_ from the parentli_ value VNI and Idx.
   /// Idx does not have to be ParentVNI->def, but it must be contained within
@@ -219,28 +189,7 @@ public:
   /// If ParentVNI has been defined by defValue one or more times, a value that
   /// dominates Idx will be returned. This may require creating extra phi-def
   /// values and adding live ranges to li_.
-  /// If simple is not NULL, *simple will indicate if ParentVNI is a simply
-  /// mapped value.
-  VNInfo *mapValue(const VNInfo *ParentVNI, SlotIndex Idx, bool *simple = 0);
-
-  // extendTo - Find the last li_ value defined in MBB at or before Idx. The
-  // parentli is assumed to be live at Idx. Extend the live range to include
-  // Idx. Return the found VNInfo, or NULL.
-  VNInfo *extendTo(const MachineBasicBlock *MBB, SlotIndex Idx);
-
-  /// isMapped - Return true is ParentVNI is a known mapped value. It may be a
-  /// simple 1-1 mapping or a complex mapping to later defs.
-  bool isMapped(const VNInfo *ParentVNI) const {
-    return valueMap_.count(ParentVNI);
-  }
-
-  /// isComplexMapped - Return true if ParentVNI has received new definitions
-  /// with defValue.
-  bool isComplexMapped(const VNInfo *ParentVNI) const;
-
-  // addSimpleRange - Add a simple range from parentli_ to li_.
-  // ParentVNI must be live in the [Start;End) interval.
-  void addSimpleRange(SlotIndex Start, SlotIndex End, const VNInfo *ParentVNI);
+  VNInfo *mapValue(const VNInfo *ParentVNI, SlotIndex Idx);
 
   /// addRange - Add live ranges to li_ where [Start;End) intersects parentli_.
   /// All needed values whose def is not inside [Start;End) must be defined
@@ -258,7 +207,7 @@ public:
 /// - Mark the ranges where the new interval is used with useIntv* 
 /// - Mark the places where the interval is exited with exitIntv*.
 /// - Finish the current interval with closeIntv and repeat from 2.
-/// - Rewrite instructions with finish().
+/// - Rewrite instructions with rewrite().
 ///
 class SplitEditor {
   SplitAnalysis &sa_;
@@ -266,54 +215,54 @@ class SplitEditor {
   VirtRegMap &vrm_;
   MachineRegisterInfo &mri_;
   const TargetInstrInfo &tii_;
-  const TargetRegisterInfo &tri_;
 
-  /// edit_ - The current parent register and new intervals created.
-  LiveRangeEdit &edit_;
+  /// curli_ - The immutable interval we are currently splitting.
+  const LiveInterval *const curli_;
 
   /// dupli_ - Created as a copy of curli_, ranges are carved out as new
   /// intervals get added through openIntv / closeIntv. This is used to avoid
   /// editing curli_.
-  LiveIntervalMap dupli_;
+  LiveInterval *dupli_;
 
   /// Currently open LiveInterval.
-  LiveIntervalMap openli_;
+  LiveInterval *openli_;
 
-  /// defFromParent - Define Reg from ParentVNI at UseIdx using either
-  /// rematerialization or a COPY from parent. Return the new value.
-  VNInfo *defFromParent(LiveIntervalMap &Reg,
-                        VNInfo *ParentVNI,
-                        SlotIndex UseIdx,
-                        MachineBasicBlock &MBB,
-                        MachineBasicBlock::iterator I);
+  /// createInterval - Create a new virtual register and LiveInterval with same
+  /// register class and spill slot as curli.
+  LiveInterval *createInterval();
 
-  /// intervalsLiveAt - Return true if any member of intervals_ is live at Idx.
-  bool intervalsLiveAt(SlotIndex Idx) const;
+  /// getDupLI - Ensure dupli is created and return it.
+  LiveInterval *getDupLI();
 
-  /// Values in curli whose live range has been truncated when entering an open
-  /// li.
-  SmallPtrSet<const VNInfo*, 8> truncatedValues;
+  /// valueMap_ - Map values in cupli to values in openli. These are direct 1-1
+  /// mappings, and do not include values created by inserted copies.
+  DenseMap<const VNInfo*, VNInfo*> valueMap_;
 
-  /// addTruncSimpleRange - Add the given simple range to dupli_ after
-  /// truncating any overlap with intervals_.
-  void addTruncSimpleRange(SlotIndex Start, SlotIndex End, VNInfo *VNI);
+  /// mapValue - Return the openIntv value that corresponds to the given curli
+  /// value.
+  VNInfo *mapValue(const VNInfo *curliVNI);
 
-  /// criticalPreds_ - Set of basic blocks where both dupli and openli should be
-  /// live out because of a critical edge.
-  SplitAnalysis::BlockPtrSet criticalPreds_;
+  /// A dupli value is live through openIntv.
+  bool liveThrough_;
 
-  /// computeRemainder - Compute the dupli liveness as the complement of all the
-  /// new intervals.
-  void computeRemainder();
+  /// All the new intervals created for this split are added to intervals_.
+  SmallVectorImpl<LiveInterval*> &intervals_;
 
-  /// rewrite - Rewrite all uses of reg to use the new registers.
-  void rewrite(unsigned reg);
+  /// The index into intervals_ of the first interval we added. There may be
+  /// others from before we got it.
+  unsigned firstInterval;
+
+  /// Insert a COPY instruction curli -> li. Allocate a new value from li
+  /// defined by the COPY
+  VNInfo *insertCopy(LiveInterval &LI,
+                     MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator I);
 
 public:
   /// Create a new SplitEditor for editing the LiveInterval analyzed by SA.
   /// Newly created intervals will be appended to newIntervals.
   SplitEditor(SplitAnalysis &SA, LiveIntervals&, VirtRegMap&,
-              MachineDominatorTree&, LiveRangeEdit&);
+              SmallVectorImpl<LiveInterval*> &newIntervals);
 
   /// getAnalysis - Get the corresponding analysis.
   SplitAnalysis &getAnalysis() { return sa_; }
@@ -326,7 +275,9 @@ public:
   void enterIntvBefore(SlotIndex Idx);
 
   /// enterIntvAtEnd - Enter openli at the end of MBB.
-  void enterIntvAtEnd(MachineBasicBlock &MBB);
+  /// PhiMBB is a successor inside openli where a PHI value is created.
+  /// Currently, all entries must share the same PhiMBB.
+  void enterIntvAtEnd(MachineBasicBlock &MBB, MachineBasicBlock &PhiMBB);
 
   /// useIntv - indicate that all instructions in MBB should use openli.
   void useIntv(const MachineBasicBlock &MBB);
@@ -345,22 +296,26 @@ public:
   /// LiveInterval, and ranges can be trimmed.
   void closeIntv();
 
-  /// finish - after all the new live ranges have been created, compute the
-  /// remaining live range, and rewrite instructions to use the new registers.
-  void finish();
+  /// rewrite - after all the new live ranges have been created, rewrite
+  /// instructions using curli to use the new intervals.
+  void rewrite();
 
   // ===--- High level methods ---===
 
   /// splitAroundLoop - Split curli into a separate live interval inside
-  /// the loop.
-  void splitAroundLoop(const MachineLoop*);
+  /// the loop. Return true if curli has been completely replaced, false if
+  /// curli is still intact, and needs to be spilled or split further.
+  bool splitAroundLoop(const MachineLoop*);
 
   /// splitSingleBlocks - Split curli into a separate live interval inside each
-  /// basic block in Blocks.
-  void splitSingleBlocks(const SplitAnalysis::BlockPtrSet &Blocks);
+  /// basic block in Blocks. Return true if curli has been completely replaced,
+  /// false if curli is still intact, and needs to be spilled or split further.
+  bool splitSingleBlocks(const SplitAnalysis::BlockPtrSet &Blocks);
 
-  /// splitInsideBlock - Split curli into multiple intervals inside MBB.
-  void splitInsideBlock(const MachineBasicBlock *);
+  /// splitInsideBlock - Split curli into multiple intervals inside MBB. Return
+  /// true if curli has been completely replaced, false if curli is still
+  /// intact, and needs to be spilled or split further.
+  bool splitInsideBlock(const MachineBasicBlock *);
 };
 
 }

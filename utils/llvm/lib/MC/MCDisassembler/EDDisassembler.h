@@ -21,7 +21,7 @@
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Mutex.h"
+#include "llvm/System/Mutex.h"
 
 #include <map>
 #include <set>

@@ -62,7 +62,8 @@ define %vec @test_insert(){
 }
 
 define void @test_unaligned_store()  {
-;CHECK:	cdd
+;CHECK:	cdd	$3, 8($3)
+;CHECK: 	lqd	
 ;CHECK:	shufb
 ;CHECK:	stqd
   %data = alloca [4 x float], align 16         ; <[4 x float]*> [#uses=1]

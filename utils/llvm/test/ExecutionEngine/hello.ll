@@ -1,4 +1,5 @@
-; RUN: lli %s > /dev/null
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 @.LC0 = internal global [12 x i8] c"Hello World\00"		; <[12 x i8]*> [#uses=1]
 

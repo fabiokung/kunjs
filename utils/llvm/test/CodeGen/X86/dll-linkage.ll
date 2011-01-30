@@ -3,7 +3,7 @@
 declare dllimport void @foo()
 
 define void @bar() nounwind {
-; CHECK: calll	*__imp__foo
+; CHECK: call	*__imp__foo
   call void @foo()
   ret void
 }

@@ -28,10 +28,15 @@
 
 using namespace llvm;
 
-static cl::opt<bool>
-OldT2IfCvt("old-thumb2-ifcvt", cl::Hidden,
-           cl::desc("Use old-style Thumb2 if-conversion heuristics"),
-           cl::init(false));
+static cl::opt<unsigned>
+IfCvtLimit("thumb2-ifcvt-limit", cl::Hidden,
+           cl::desc("Thumb2 if-conversion limit (default 3)"),
+           cl::init(3));
+
+static cl::opt<unsigned>
+IfCvtDiamondLimit("thumb2-ifcvt-diamond-limit", cl::Hidden,
+                  cl::desc("Thumb2 diamond if-conversion limit (default 3)"),
+                  cl::init(3));
 
 Thumb2InstrInfo::Thumb2InstrInfo(const ARMSubtarget &STI)
   : ARMBaseInstrInfo(STI), RI(*this, STI) {
@@ -100,6 +105,21 @@ Thumb2InstrInfo::isLegalToSplitMBBAt(MachineBasicBlock &MBB,
   return llvm::getITInstrPredicate(MBBI, PredReg) == ARMCC::AL;
 }
 
+bool Thumb2InstrInfo::isProfitableToIfCvt(MachineBasicBlock &MBB,
+                                          unsigned NumInstrs) const {
+  return NumInstrs && NumInstrs <= IfCvtLimit;
+}
+  
+bool Thumb2InstrInfo::
+isProfitableToIfCvt(MachineBasicBlock &TMBB, unsigned NumT,
+                    MachineBasicBlock &FMBB, unsigned NumF) const {
+  // FIXME: Catch optimization such as:
+  //        r0 = movne
+  //        r0 = moveq
+  return NumT && NumF &&
+    NumT <= (IfCvtDiamondLimit) && NumF <= (IfCvtDiamondLimit);
+}
+
 void Thumb2InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator I, DebugLoc DL,
                                   unsigned DestReg, unsigned SrcReg,
@@ -135,9 +155,8 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     MachineFunction &MF = *MBB.getParent();
     MachineFrameInfo &MFI = *MF.getFrameInfo();
     MachineMemOperand *MMO =
-      MF.getMachineMemOperand(
-                      MachinePointerInfo(PseudoSourceValue::getFixedStack(FI)),
-                              MachineMemOperand::MOStore,
+      MF.getMachineMemOperand(PseudoSourceValue::getFixedStack(FI),
+                              MachineMemOperand::MOStore, 0,
                               MFI.getObjectSize(FI),
                               MFI.getObjectAlignment(FI));
     AddDefaultPred(BuildMI(MBB, I, DL, get(ARM::t2STRi12))
@@ -162,9 +181,8 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     MachineFunction &MF = *MBB.getParent();
     MachineFrameInfo &MFI = *MF.getFrameInfo();
     MachineMemOperand *MMO =
-      MF.getMachineMemOperand(
-                      MachinePointerInfo(PseudoSourceValue::getFixedStack(FI)),
-                              MachineMemOperand::MOLoad,
+      MF.getMachineMemOperand(PseudoSourceValue::getFixedStack(FI),
+                              MachineMemOperand::MOLoad, 0,
                               MFI.getObjectSize(FI),
                               MFI.getObjectAlignment(FI));
     AddDefaultPred(BuildMI(MBB, I, DL, get(ARM::t2LDRi12), DestReg)
@@ -176,7 +194,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 }
 
 ScheduleHazardRecognizer *Thumb2InstrInfo::
-CreateTargetPostRAHazardRecognizer(const InstrItineraryData *II) const {
+CreateTargetPostRAHazardRecognizer(const InstrItineraryData &II) const {
   return (ScheduleHazardRecognizer *)new Thumb2HazardRecognizer(II);
 }
 

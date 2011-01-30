@@ -12,6 +12,7 @@ add_llvm_library(LLVMScalarOpts
   JumpThreading.cpp
   LICM.cpp
   LoopDeletion.cpp
+  LoopIndexSplit.cpp
   LoopRotation.cpp
   LoopStrengthReduce.cpp
   LoopUnrollPass.cpp
@@ -30,3 +31,5 @@ add_llvm_library(LLVMScalarOpts
   TailDuplication.cpp
   TailRecursionElimination.cpp
   )
+
+target_link_libraries (LLVMScalarOpts LLVMTransformUtils)

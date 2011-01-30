@@ -2,7 +2,7 @@ add_executable(FileUpdate
   FileUpdate.cpp
   )
 
-target_link_libraries(FileUpdate LLVMSupport)
+target_link_libraries(FileUpdate LLVMSupport LLVMSystem)
 if( MINGW )
   target_link_libraries(FileUpdate imagehlp psapi)
 endif( MINGW )

@@ -14,7 +14,7 @@
 #ifndef LLVM_SUPPORT_MACHO_H
 #define LLVM_SUPPORT_MACHO_H
 
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 // NOTE: The enums in this file are intentially named to be different than those
 // in the headers in /usr/include/mach (on darwin systems) to avoid conflicts
@@ -681,9 +681,7 @@ namespace llvm {
       // ARM
       CPUSubType_ARM_ALL     = 0,
       CPUSubType_ARM_V4T     = 5,
-      CPUSubType_ARM_V5      = 7,
       CPUSubType_ARM_V6      = 6,
-      CPUSubType_ARM_V7      = 9,
 
       // PowerPC
       CPUSubType_POWERPC_ALL = 0,

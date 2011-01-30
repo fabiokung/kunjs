@@ -9,7 +9,7 @@
 //
 // This file contains the declarations of classes that represent "derived
 // types".  These are things like "arrays of x" or "structure of x, y, z" or
-// "function returning x taking (y,z) as parameters", etc...
+// "method returning x taking (y,z) as parameters", etc...
 //
 // The implementations of these classes live in the Type.cpp file.
 //
@@ -19,7 +19,6 @@
 #define LLVM_DERIVED_TYPES_H
 
 #include "llvm/Type.h"
-#include "llvm/Support/DataTypes.h"
 
 namespace llvm {
 

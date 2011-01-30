@@ -48,7 +48,6 @@
 #include "llvm/Support/PatternMatch.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm-c/Initialization.h"
 #include <algorithm>
 #include <climits>
 using namespace llvm;
@@ -59,18 +58,10 @@ STATISTIC(NumConstProp, "Number of constant folds");
 STATISTIC(NumDeadInst , "Number of dead inst eliminated");
 STATISTIC(NumSunkInst , "Number of instructions sunk");
 
-// Initialization Routines
-void llvm::initializeInstCombine(PassRegistry &Registry) {
-  initializeInstCombinerPass(Registry);
-}
-
-void LLVMInitializeInstCombine(LLVMPassRegistryRef R) {
-  initializeInstCombine(*unwrap(R));
-}
 
 char InstCombiner::ID = 0;
 INITIALIZE_PASS(InstCombiner, "instcombine",
-                "Combine redundant instructions", false, false)
+                "Combine redundant instructions", false, false);
 
 void InstCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreservedID(LCSSAID);
@@ -106,244 +97,53 @@ bool InstCombiner::ShouldChangeType(const Type *From, const Type *To) const {
 }
 
 
-/// SimplifyAssociativeOrCommutative - This performs a few simplifications for
-/// operators which are associative or commutative:
-//
-//  Commutative operators:
+// SimplifyCommutative - This performs a few simplifications for commutative
+// operators:
 //
 //  1. Order operands such that they are listed from right (least complex) to
 //     left (most complex).  This puts constants before unary operators before
 //     binary operators.
 //
-//  Associative operators:
+//  2. Transform: (op (op V, C1), C2) ==> (op V, (op C1, C2))
+//  3. Transform: (op (op V1, C1), (op V2, C2)) ==> (op (op V1, V2), (op C1,C2))
 //
-//  2. Transform: "(A op B) op C" ==> "A op (B op C)" if "B op C" simplifies.
-//  3. Transform: "A op (B op C)" ==> "(A op B) op C" if "A op B" simplifies.
-//
-//  Associative and commutative operators:
-//
-//  4. Transform: "(A op B) op C" ==> "(C op A) op B" if "C op A" simplifies.
-//  5. Transform: "A op (B op C)" ==> "B op (C op A)" if "C op A" simplifies.
-//  6. Transform: "(A op C1) op (B op C2)" ==> "(A op B) op (C1 op C2)"
-//     if C1 and C2 are constants.
-//
-bool InstCombiner::SimplifyAssociativeOrCommutative(BinaryOperator &I) {
-  Instruction::BinaryOps Opcode = I.getOpcode();
+bool InstCombiner::SimplifyCommutative(BinaryOperator &I) {
   bool Changed = false;
+  if (getComplexity(I.getOperand(0)) < getComplexity(I.getOperand(1)))
+    Changed = !I.swapOperands();
 
-  do {
-    // Order operands such that they are listed from right (least complex) to
-    // left (most complex).  This puts constants before unary operators before
-    // binary operators.
-    if (I.isCommutative() && getComplexity(I.getOperand(0)) <
-        getComplexity(I.getOperand(1)))
-      Changed = !I.swapOperands();
-
-    BinaryOperator *Op0 = dyn_cast<BinaryOperator>(I.getOperand(0));
-    BinaryOperator *Op1 = dyn_cast<BinaryOperator>(I.getOperand(1));
-
-    if (I.isAssociative()) {
-      // Transform: "(A op B) op C" ==> "A op (B op C)" if "B op C" simplifies.
-      if (Op0 && Op0->getOpcode() == Opcode) {
-        Value *A = Op0->getOperand(0);
-        Value *B = Op0->getOperand(1);
-        Value *C = I.getOperand(1);
-
-        // Does "B op C" simplify?
-        if (Value *V = SimplifyBinOp(Opcode, B, C, TD)) {
-          // It simplifies to V.  Form "A op V".
-          I.setOperand(0, A);
-          I.setOperand(1, V);
-          Changed = true;
-          continue;
-        }
-      }
-
-      // Transform: "A op (B op C)" ==> "(A op B) op C" if "A op B" simplifies.
-      if (Op1 && Op1->getOpcode() == Opcode) {
-        Value *A = I.getOperand(0);
-        Value *B = Op1->getOperand(0);
-        Value *C = Op1->getOperand(1);
-
-        // Does "A op B" simplify?
-        if (Value *V = SimplifyBinOp(Opcode, A, B, TD)) {
-          // It simplifies to V.  Form "V op C".
-          I.setOperand(0, V);
-          I.setOperand(1, C);
-          Changed = true;
-          continue;
-        }
-      }
-    }
-
-    if (I.isAssociative() && I.isCommutative()) {
-      // Transform: "(A op B) op C" ==> "(C op A) op B" if "C op A" simplifies.
-      if (Op0 && Op0->getOpcode() == Opcode) {
-        Value *A = Op0->getOperand(0);
-        Value *B = Op0->getOperand(1);
-        Value *C = I.getOperand(1);
-
-        // Does "C op A" simplify?
-        if (Value *V = SimplifyBinOp(Opcode, C, A, TD)) {
-          // It simplifies to V.  Form "V op B".
-          I.setOperand(0, V);
-          I.setOperand(1, B);
-          Changed = true;
-          continue;
-        }
-      }
-
-      // Transform: "A op (B op C)" ==> "B op (C op A)" if "C op A" simplifies.
-      if (Op1 && Op1->getOpcode() == Opcode) {
-        Value *A = I.getOperand(0);
-        Value *B = Op1->getOperand(0);
-        Value *C = Op1->getOperand(1);
-
-        // Does "C op A" simplify?
-        if (Value *V = SimplifyBinOp(Opcode, C, A, TD)) {
-          // It simplifies to V.  Form "B op V".
-          I.setOperand(0, B);
-          I.setOperand(1, V);
-          Changed = true;
-          continue;
-        }
-      }
-
-      // Transform: "(A op C1) op (B op C2)" ==> "(A op B) op (C1 op C2)"
-      // if C1 and C2 are constants.
-      if (Op0 && Op1 &&
-          Op0->getOpcode() == Opcode && Op1->getOpcode() == Opcode &&
-          isa<Constant>(Op0->getOperand(1)) &&
-          isa<Constant>(Op1->getOperand(1)) &&
-          Op0->hasOneUse() && Op1->hasOneUse()) {
-        Value *A = Op0->getOperand(0);
-        Constant *C1 = cast<Constant>(Op0->getOperand(1));
-        Value *B = Op1->getOperand(0);
-        Constant *C2 = cast<Constant>(Op1->getOperand(1));
-
-        Constant *Folded = ConstantExpr::get(Opcode, C1, C2);
-        Instruction *New = BinaryOperator::Create(Opcode, A, B, Op1->getName(),
-                                                  &I);
-        Worklist.Add(New);
-        I.setOperand(0, New);
+  if (!I.isAssociative()) return Changed;
+  
+  Instruction::BinaryOps Opcode = I.getOpcode();
+  if (BinaryOperator *Op = dyn_cast<BinaryOperator>(I.getOperand(0)))
+    if (Op->getOpcode() == Opcode && isa<Constant>(Op->getOperand(1))) {
+      if (isa<Constant>(I.getOperand(1))) {
+        Constant *Folded = ConstantExpr::get(I.getOpcode(),
+                                             cast<Constant>(I.getOperand(1)),
+                                             cast<Constant>(Op->getOperand(1)));
+        I.setOperand(0, Op->getOperand(0));
         I.setOperand(1, Folded);
-        Changed = true;
-        continue;
+        return true;
       }
+      
+      if (BinaryOperator *Op1 = dyn_cast<BinaryOperator>(I.getOperand(1)))
+        if (Op1->getOpcode() == Opcode && isa<Constant>(Op1->getOperand(1)) &&
+            Op->hasOneUse() && Op1->hasOneUse()) {
+          Constant *C1 = cast<Constant>(Op->getOperand(1));
+          Constant *C2 = cast<Constant>(Op1->getOperand(1));
+
+          // Fold (op (op V1, C1), (op V2, C2)) ==> (op (op V1, V2), (op C1,C2))
+          Constant *Folded = ConstantExpr::get(I.getOpcode(), C1, C2);
+          Instruction *New = BinaryOperator::Create(Opcode, Op->getOperand(0),
+                                                    Op1->getOperand(0),
+                                                    Op1->getName(), &I);
+          Worklist.Add(New);
+          I.setOperand(0, New);
+          I.setOperand(1, Folded);
+          return true;
+        }
     }
-
-    // No further simplifications.
-    return Changed;
-  } while (1);
-}
-
-/// LeftDistributesOverRight - Whether "X LOp (Y ROp Z)" is always equal to
-/// "(X LOp Y) ROp (X LOp Z)".
-static bool LeftDistributesOverRight(Instruction::BinaryOps LOp,
-                                     Instruction::BinaryOps ROp) {
-  switch (LOp) {
-  default:
-    return false;
-
-  case Instruction::And:
-    // And distributes over Or and Xor.
-    switch (ROp) {
-    default:
-      return false;
-    case Instruction::Or:
-    case Instruction::Xor:
-      return true;
-    }
-
-  case Instruction::Mul:
-    // Multiplication distributes over addition and subtraction.
-    switch (ROp) {
-    default:
-      return false;
-    case Instruction::Add:
-    case Instruction::Sub:
-      return true;
-    }
-
-  case Instruction::Or:
-    // Or distributes over And.
-    switch (ROp) {
-    default:
-      return false;
-    case Instruction::And:
-      return true;
-    }
-  }
-}
-
-/// RightDistributesOverLeft - Whether "(X LOp Y) ROp Z" is always equal to
-/// "(X ROp Z) LOp (Y ROp Z)".
-static bool RightDistributesOverLeft(Instruction::BinaryOps LOp,
-                                     Instruction::BinaryOps ROp) {
-  if (Instruction::isCommutative(ROp))
-    return LeftDistributesOverRight(ROp, LOp);
-  // TODO: It would be nice to handle division, aka "(X + Y)/Z = X/Z + Y/Z",
-  // but this requires knowing that the addition does not overflow and other
-  // such subtleties.
-  return false;
-}
-
-/// SimplifyByFactorizing - This tries to simplify binary operations which
-/// some other binary operation distributes over by factorizing out a common
-/// term (eg "(A*B)+(A*C)" -> "A*(B+C)").  Returns the simplified value, or
-/// null if no simplification was performed.
-Instruction *InstCombiner::SimplifyByFactorizing(BinaryOperator &I) {
-  BinaryOperator *Op0 = dyn_cast<BinaryOperator>(I.getOperand(0));
-  BinaryOperator *Op1 = dyn_cast<BinaryOperator>(I.getOperand(1));
-  if (!Op0 || !Op1 || Op0->getOpcode() != Op1->getOpcode())
-    return 0;
-
-  // The instruction has the form "(A op' B) op (C op' D)".
-  Value *A = Op0->getOperand(0); Value *B = Op0->getOperand(1);
-  Value *C = Op1->getOperand(0); Value *D = Op1->getOperand(1);
-  Instruction::BinaryOps OuterOpcode = I.getOpcode(); // op
-  Instruction::BinaryOps InnerOpcode = Op0->getOpcode(); // op'
-
-  // Does "X op' Y" always equal "Y op' X"?
-  bool InnerCommutative = Instruction::isCommutative(InnerOpcode);
-
-  // Does "X op' (Y op Z)" always equal "(X op' Y) op (X op' Z)"?
-  if (LeftDistributesOverRight(InnerOpcode, OuterOpcode))
-    // Does the instruction have the form "(A op' B) op (A op' D)" or, in the
-    // commutative case, "(A op' B) op (C op' A)"?
-    if (A == C || (InnerCommutative && A == D)) {
-      if (A != C)
-        std::swap(C, D);
-      // Consider forming "A op' (B op D)".
-      // If "B op D" simplifies then it can be formed with no cost.
-      Value *RHS = SimplifyBinOp(OuterOpcode, B, D, TD);
-      // If "B op D" doesn't simplify then only proceed if both of the existing
-      // operations "A op' B" and "C op' D" will be zapped since no longer used.
-      if (!RHS && Op0->hasOneUse() && Op1->hasOneUse())
-        RHS = Builder->CreateBinOp(OuterOpcode, B, D, Op1->getName());
-      if (RHS)
-        return BinaryOperator::Create(InnerOpcode, A, RHS);
-    }
-
-  // Does "(X op Y) op' Z" always equal "(X op' Z) op (Y op' Z)"?
-  if (RightDistributesOverLeft(OuterOpcode, InnerOpcode))
-    // Does the instruction have the form "(A op' B) op (C op' B)" or, in the
-    // commutative case, "(A op' B) op (B op' D)"?
-    if (B == D || (InnerCommutative && B == C)) {
-      if (B != D)
-        std::swap(C, D);
-      // Consider forming "(A op C) op' B".
-      // If "A op C" simplifies then it can be formed with no cost.
-      Value *LHS = SimplifyBinOp(OuterOpcode, A, C, TD);
-      // If "A op C" doesn't simplify then only proceed if both of the existing
-      // operations "A op' B" and "C op' D" will be zapped since no longer used.
-      if (!LHS && Op0->hasOneUse() && Op1->hasOneUse())
-        LHS = Builder->CreateBinOp(OuterOpcode, A, C, Op0->getName());
-      if (LHS)
-        return BinaryOperator::Create(InnerOpcode, LHS, B);
-    }
-
-  return 0;
+  return Changed;
 }
 
 // dyn_castNegVal - Given a 'sub' instruction, return the RHS of the instruction
@@ -632,35 +432,28 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
   Value *PtrOp = GEP.getOperand(0);
 
-  // Eliminate unneeded casts for indices, and replace indices which displace
-  // by multiples of a zero size type with zero.
+  if (isa<UndefValue>(GEP.getOperand(0)))
+    return ReplaceInstUsesWith(GEP, UndefValue::get(GEP.getType()));
+
+  // Eliminate unneeded casts for indices.
   if (TD) {
     bool MadeChange = false;
-    const Type *IntPtrTy = TD->getIntPtrType(GEP.getContext());
-
+    unsigned PtrSize = TD->getPointerSizeInBits();
+    
     gep_type_iterator GTI = gep_type_begin(GEP);
     for (User::op_iterator I = GEP.op_begin() + 1, E = GEP.op_end();
          I != E; ++I, ++GTI) {
-      // Skip indices into struct types.
-      const SequentialType *SeqTy = dyn_cast<SequentialType>(*GTI);
-      if (!SeqTy) continue;
-
-      // If the element type has zero size then any index over it is equivalent
-      // to an index of zero, so replace it with zero if it is not zero already.
-      if (SeqTy->getElementType()->isSized() &&
-          TD->getTypeAllocSize(SeqTy->getElementType()) == 0)
-        if (!isa<Constant>(*I) || !cast<Constant>(*I)->isNullValue()) {
-          *I = Constant::getNullValue(IntPtrTy);
-          MadeChange = true;
-        }
-
-      if ((*I)->getType() != IntPtrTy) {
-        // If we are using a wider index than needed for this platform, shrink
-        // it to what we need.  If narrower, sign-extend it to what we need.
-        // This explicit cast can make subsequent optimizations more obvious.
-        *I = Builder->CreateIntCast(*I, IntPtrTy, true);
-        MadeChange = true;
-      }
+      if (!isa<SequentialType>(*GTI)) continue;
+      
+      // If we are using a wider index than needed for this platform, shrink it
+      // to what we need.  If narrower, sign-extend it to what we need.  This
+      // explicit cast can make subsequent optimizations more obvious.
+      unsigned OpBits = cast<IntegerType>((*I)->getType())->getBitWidth();
+      if (OpBits == PtrSize)
+        continue;
+      
+      *I = Builder->CreateIntCast(*I, TD->getIntPtrType(GEP.getContext()),true);
+      MadeChange = true;
     }
     if (MadeChange) return &GEP;
   }
@@ -1171,37 +964,10 @@ Instruction *InstCombiner::visitExtractValueInst(ExtractValueInst &EV) {
       }
     }
   }
-  if (LoadInst *L = dyn_cast<LoadInst>(Agg))
-    // If the (non-volatile) load only has one use, we can rewrite this to a
-    // load from a GEP. This reduces the size of the load.
-    // FIXME: If a load is used only by extractvalue instructions then this
-    //        could be done regardless of having multiple uses.
-    if (!L->isVolatile() && L->hasOneUse()) {
-      // extractvalue has integer indices, getelementptr has Value*s. Convert.
-      SmallVector<Value*, 4> Indices;
-      // Prefix an i32 0 since we need the first element.
-      Indices.push_back(Builder->getInt32(0));
-      for (ExtractValueInst::idx_iterator I = EV.idx_begin(), E = EV.idx_end();
-            I != E; ++I)
-        Indices.push_back(Builder->getInt32(*I));
-
-      // We need to insert these at the location of the old load, not at that of
-      // the extractvalue.
-      Builder->SetInsertPoint(L->getParent(), L);
-      Value *GEP = Builder->CreateInBoundsGEP(L->getPointerOperand(),
-                                              Indices.begin(), Indices.end());
-      // Returning the load directly will cause the main loop to insert it in
-      // the wrong spot, so use ReplaceInstUsesWith().
-      return ReplaceInstUsesWith(EV, Builder->CreateLoad(GEP));
-    }
-  // We could simplify extracts from other values. Note that nested extracts may
-  // already be simplified implicitly by the above: extract (extract (insert) )
+  // Can't simplify extracts from other values. Note that nested extracts are
+  // already simplified implicitely by the above (extract ( extract (insert) )
   // will be translated into extract ( insert ( extract ) ) first and then just
-  // the value inserted, if appropriate. Similarly for extracts from single-use
-  // loads: extract (extract (load)) will be translated to extract (load (gep))
-  // and if again single-use then via load (gep (gep)) to load (gep).
-  // However, double extracts from e.g. function arguments or return values
-  // aren't handled yet.
+  // the value inserted, if appropriate).
   return 0;
 }
 
@@ -1257,8 +1023,10 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB,
   bool MadeIRChange = false;
   SmallVector<BasicBlock*, 256> Worklist;
   Worklist.push_back(BB);
+  
+  std::vector<Instruction*> InstrsForInstCombineWorklist;
+  InstrsForInstCombineWorklist.reserve(128);
 
-  SmallVector<Instruction*, 128> InstrsForInstCombineWorklist;
   SmallPtrSet<ConstantExpr*, 64> FoldedConstants;
   
   do {

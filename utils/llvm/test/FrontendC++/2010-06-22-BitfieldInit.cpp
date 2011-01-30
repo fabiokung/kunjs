@@ -1,4 +1,4 @@
-// RUN: %llvmgxx -g -S %s
+// RUN: %llvmgxx -g -c %s
 struct TEST2
 {
   int subid:32;

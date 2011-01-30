@@ -19,5 +19,5 @@ define i32 @main(i32 %argc, i8** %argv) {
  ret i32 0
 }
 
-; CHECK: calll tailcaller
+; CHECK: call tailcaller
 ; CHECK-NEXT: subl $12

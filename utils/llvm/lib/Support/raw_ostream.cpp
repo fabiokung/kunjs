@@ -13,13 +13,13 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/Process.h"
-#include "llvm/ADT/StringExtras.h"
+#include "llvm/System/Program.h"
+#include "llvm/System/Process.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/System/Signals.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cctype>
 #include <cerrno>
@@ -31,10 +31,6 @@
 #endif
 #if defined(HAVE_FCNTL_H)
 # include <fcntl.h>
-#endif
-
-#if defined(__CYGWIN__)
-#include <io.h>
 #endif
 
 #if defined(_MSC_VER)
@@ -168,8 +164,7 @@ raw_ostream &raw_ostream::write_hex(unsigned long long N) {
   return write(CurPtr, EndPtr-CurPtr);
 }
 
-raw_ostream &raw_ostream::write_escaped(StringRef Str,
-                                        bool UseHexEscapes) {
+raw_ostream &raw_ostream::write_escaped(StringRef Str) {
   for (unsigned i = 0, e = Str.size(); i != e; ++i) {
     unsigned char c = Str[i];
 
@@ -192,18 +187,11 @@ raw_ostream &raw_ostream::write_escaped(StringRef Str,
         break;
       }
 
-      // Write out the escaped representation.
-      if (UseHexEscapes) {
-        *this << '\\' << 'x';
-        *this << hexdigit((c >> 4 & 0xF));
-        *this << hexdigit((c >> 0) & 0xF);
-      } else {
-        // Always use a full 3-character octal escape.
-        *this << '\\';
-        *this << char('0' + ((c >> 6) & 7));
-        *this << char('0' + ((c >> 3) & 7));
-        *this << char('0' + ((c >> 0) & 7));
-      }
+      // Always expand to a 3-character octal escape.
+      *this << '\\';
+      *this << char('0' + ((c >> 6) & 7));
+      *this << char('0' + ((c >> 3) & 7));
+      *this << char('0' + ((c >> 0) & 7));
     }
   }
 
@@ -420,19 +408,6 @@ raw_fd_ostream::raw_fd_ostream(const char *Filename, std::string &ErrorInfo,
 
   // Ok, we successfully opened the file, so it'll need to be closed.
   ShouldClose = true;
-}
-
-/// raw_fd_ostream ctor - FD is the file descriptor that this writes to.  If
-/// ShouldClose is true, this closes the file when the stream is destroyed.
-raw_fd_ostream::raw_fd_ostream(int fd, bool shouldClose, bool unbuffered)
-  : raw_ostream(unbuffered), FD(fd),
-    ShouldClose(shouldClose), Error(false) {
-#ifdef O_BINARY
-  // Setting STDOUT and STDERR to binary mode is necessary in Win32
-  // to avoid undesirable linefeed conversion.
-  if (fd == STDOUT_FILENO || fd == STDERR_FILENO)
-    setmode(fd, O_BINARY);
-#endif
 }
 
 raw_fd_ostream::~raw_fd_ostream() {
@@ -689,4 +664,35 @@ void raw_null_ostream::write_impl(const char *Ptr, size_t Size) {
 
 uint64_t raw_null_ostream::current_pos() const {
   return 0;
+}
+
+//===----------------------------------------------------------------------===//
+//  tool_output_file
+//===----------------------------------------------------------------------===//
+
+tool_output_file::CleanupInstaller::CleanupInstaller(const char *filename)
+  : Filename(filename), Keep(false) {
+  // Arrange for the file to be deleted if the process is killed.
+  if (Filename != "-")
+    sys::RemoveFileOnSignal(sys::Path(Filename));
+}
+
+tool_output_file::CleanupInstaller::~CleanupInstaller() {
+  // Delete the file if the client hasn't told us not to.
+  if (!Keep && Filename != "-")
+    sys::Path(Filename).eraseFromDisk();
+
+  // Ok, the file is successfully written and closed, or deleted. There's no
+  // further need to clean it up on signals.
+  if (Filename != "-")
+    sys::DontRemoveFileOnSignal(sys::Path(Filename));
+}
+
+tool_output_file::tool_output_file(const char *filename, std::string &ErrorInfo,
+                                   unsigned Flags)
+  : Installer(filename),
+    OS(filename, ErrorInfo, Flags) {
+  // If open fails, no cleanup is needed.
+  if (!ErrorInfo.empty())
+    Installer.Keep = true;
 }

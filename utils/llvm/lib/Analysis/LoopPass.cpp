@@ -30,6 +30,7 @@ private:
 
 public:
   static char ID;
+  PrintLoopPass() : LoopPass(ID), Out(dbgs()) {}
   PrintLoopPass(const std::string &B, raw_ostream &o)
       : LoopPass(ID), Banner(B), Out(o) {}
 

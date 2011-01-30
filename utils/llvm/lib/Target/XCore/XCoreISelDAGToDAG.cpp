@@ -68,9 +68,12 @@ namespace {
     }
 
     // Complex Pattern Selectors.
-    bool SelectADDRspii(SDValue Addr, SDValue &Base, SDValue &Offset);
-    bool SelectADDRdpii(SDValue Addr, SDValue &Base, SDValue &Offset);
-    bool SelectADDRcpii(SDValue Addr, SDValue &Base, SDValue &Offset);
+    bool SelectADDRspii(SDNode *Op, SDValue Addr, SDValue &Base,
+                        SDValue &Offset);
+    bool SelectADDRdpii(SDNode *Op, SDValue Addr, SDValue &Base,
+                        SDValue &Offset);
+    bool SelectADDRcpii(SDNode *Op, SDValue Addr, SDValue &Base,
+                        SDValue &Offset);
     
     virtual const char *getPassName() const {
       return "XCore DAG->DAG Pattern Instruction Selection";
@@ -88,8 +91,8 @@ FunctionPass *llvm::createXCoreISelDag(XCoreTargetMachine &TM) {
   return new XCoreDAGToDAGISel(TM);
 }
 
-bool XCoreDAGToDAGISel::SelectADDRspii(SDValue Addr, SDValue &Base,
-                                       SDValue &Offset) {
+bool XCoreDAGToDAGISel::SelectADDRspii(SDNode *Op, SDValue Addr,
+                                  SDValue &Base, SDValue &Offset) {
   FrameIndexSDNode *FIN = 0;
   if ((FIN = dyn_cast<FrameIndexSDNode>(Addr))) {
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), MVT::i32);
@@ -110,8 +113,8 @@ bool XCoreDAGToDAGISel::SelectADDRspii(SDValue Addr, SDValue &Base,
   return false;
 }
 
-bool XCoreDAGToDAGISel::SelectADDRdpii(SDValue Addr, SDValue &Base,
-                                       SDValue &Offset) {
+bool XCoreDAGToDAGISel::SelectADDRdpii(SDNode *Op, SDValue Addr,
+                                  SDValue &Base, SDValue &Offset) {
   if (Addr.getOpcode() == XCoreISD::DPRelativeWrapper) {
     Base = Addr.getOperand(0);
     Offset = CurDAG->getTargetConstant(0, MVT::i32);
@@ -131,8 +134,8 @@ bool XCoreDAGToDAGISel::SelectADDRdpii(SDValue Addr, SDValue &Base,
   return false;
 }
 
-bool XCoreDAGToDAGISel::SelectADDRcpii(SDValue Addr, SDValue &Base,
-                                       SDValue &Offset) {
+bool XCoreDAGToDAGISel::SelectADDRcpii(SDNode *Op, SDValue Addr,
+                                  SDValue &Base, SDValue &Offset) {
   if (Addr.getOpcode() == XCoreISD::CPRelativeWrapper) {
     Base = Addr.getOperand(0);
     Offset = CurDAG->getTargetConstant(0, MVT::i32);

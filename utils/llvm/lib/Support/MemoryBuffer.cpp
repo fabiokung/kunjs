@@ -15,10 +15,10 @@
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Support/Errno.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Support/Process.h"
-#include "llvm/Support/Program.h"
+#include "llvm/System/Errno.h"
+#include "llvm/System/Path.h"
+#include "llvm/System/Process.h"
+#include "llvm/System/Program.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -144,18 +144,20 @@ MemoryBuffer *MemoryBuffer::getNewMemBuffer(size_t Size, StringRef BufferName) {
 /// returns an empty buffer.
 MemoryBuffer *MemoryBuffer::getFileOrSTDIN(StringRef Filename,
                                            std::string *ErrStr,
-                                           int64_t FileSize) {
+                                           int64_t FileSize,
+                                           struct stat *FileInfo) {
   if (Filename == "-")
     return getSTDIN(ErrStr);
-  return getFile(Filename, ErrStr, FileSize);
+  return getFile(Filename, ErrStr, FileSize, FileInfo);
 }
 
 MemoryBuffer *MemoryBuffer::getFileOrSTDIN(const char *Filename,
                                            std::string *ErrStr,
-                                           int64_t FileSize) {
+                                           int64_t FileSize,
+                                           struct stat *FileInfo) {
   if (strcmp(Filename, "-") == 0)
     return getSTDIN(ErrStr);
-  return getFile(Filename, ErrStr, FileSize);
+  return getFile(Filename, ErrStr, FileSize, FileInfo);
 }
 
 //===----------------------------------------------------------------------===//
@@ -186,14 +188,13 @@ public:
 }
 
 MemoryBuffer *MemoryBuffer::getFile(StringRef Filename, std::string *ErrStr,
-                                    int64_t FileSize) {
-  // Ensure the path is null terminated.
+                                    int64_t FileSize, struct stat *FileInfo) {
   SmallString<256> PathBuf(Filename.begin(), Filename.end());
-  return MemoryBuffer::getFile(PathBuf.c_str(), ErrStr, FileSize);
+  return MemoryBuffer::getFile(PathBuf.c_str(), ErrStr, FileSize, FileInfo);
 }
 
 MemoryBuffer *MemoryBuffer::getFile(const char *Filename, std::string *ErrStr,
-                                    int64_t FileSize) {
+                                    int64_t FileSize, struct stat *FileInfo) {
   int OpenFlags = O_RDONLY;
 #ifdef O_BINARY
   OpenFlags |= O_BINARY;  // Open input file in binary mode on win32.
@@ -203,27 +204,23 @@ MemoryBuffer *MemoryBuffer::getFile(const char *Filename, std::string *ErrStr,
     if (ErrStr) *ErrStr = sys::StrError();
     return 0;
   }
-
-  return getOpenFile(FD, Filename, ErrStr, FileSize);
-}
-
-MemoryBuffer *MemoryBuffer::getOpenFile(int FD, const char *Filename,
-                                        std::string *ErrStr, int64_t FileSize) {
   FileCloser FC(FD); // Close FD on return.
-
+  
   // If we don't know the file size, use fstat to find out.  fstat on an open
   // file descriptor is cheaper than stat on a random path.
-  if (FileSize == -1) {
-    struct stat FileInfo;
+  if (FileSize == -1 || FileInfo) {
+    struct stat MyFileInfo;
+    struct stat *FileInfoPtr = FileInfo? FileInfo : &MyFileInfo;
+    
     // TODO: This should use fstat64 when available.
-    if (fstat(FD, &FileInfo) == -1) {
+    if (fstat(FD, FileInfoPtr) == -1) {
       if (ErrStr) *ErrStr = sys::StrError();
       return 0;
     }
-    FileSize = FileInfo.st_size;
+    FileSize = FileInfoPtr->st_size;
   }
-
-
+  
+  
   // If the file is large, try to use mmap to read it in.  We don't use mmap
   // for small files, because this can severely fragment our address space. Also
   // don't try to map files that are exactly a multiple of the system page size,

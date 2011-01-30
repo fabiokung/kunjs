@@ -17,7 +17,7 @@
 #define LLVM_CODEGEN_EXACTHAZARDRECOGNIZER_H
 
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 #include <cassert>
 #include <cstring>
@@ -75,13 +75,13 @@ class PostRAHazardRecognizer : public ScheduleHazardRecognizer {
   };
 
   // Itinerary data for the target.
-  const InstrItineraryData *ItinData;
+  const InstrItineraryData &ItinData;
 
   ScoreBoard ReservedScoreboard;
   ScoreBoard RequiredScoreboard;
 
 public:
-  PostRAHazardRecognizer(const InstrItineraryData *ItinData);
+  PostRAHazardRecognizer(const InstrItineraryData &ItinData);
 
   virtual HazardType getHazardType(SUnit *SU);
   virtual void Reset();

@@ -147,8 +147,8 @@ SystemZTargetLowering::SystemZTargetLowering(SystemZTargetMachine &tm) :
   setOperationAction(ISD::FREM,             MVT::f64, Expand);
 
   // We have only 64-bit bitconverts
-  setOperationAction(ISD::BITCAST,          MVT::f32, Expand);
-  setOperationAction(ISD::BITCAST,          MVT::i32, Expand);
+  setOperationAction(ISD::BIT_CONVERT,      MVT::f32, Expand);
+  setOperationAction(ISD::BIT_CONVERT,      MVT::i32, Expand);
 
   setOperationAction(ISD::UINT_TO_FP,       MVT::i32, Expand);
   setOperationAction(ISD::UINT_TO_FP,       MVT::i64, Expand);
@@ -341,7 +341,7 @@ SystemZTargetLowering::LowerCCCArguments(SDValue Chain,
       // from this parameter
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy());
       ArgValue = DAG.getLoad(LocVT, dl, Chain, FIN,
-                             MachinePointerInfo::getFixedStack(FI),
+                             PseudoSourceValue::getFixedStack(FI), 0,
                              false, false, 0);
     }
 
@@ -377,8 +377,8 @@ SystemZTargetLowering::LowerCCCCallTo(SDValue Chain, SDValue Callee,
                                       const SmallVectorImpl<ISD::InputArg> &Ins,
                                       DebugLoc dl, SelectionDAG &DAG,
                                       SmallVectorImpl<SDValue> &InVals) const {
+
   MachineFunction &MF = DAG.getMachineFunction();
-  const TargetFrameInfo *TFI = TM.getFrameInfo();
 
   // Offset to first argument stack slot.
   const unsigned FirstArgOffset = 160;
@@ -431,7 +431,7 @@ SystemZTargetLowering::LowerCCCCallTo(SDValue Chain, SDValue Callee,
       if (StackPtr.getNode() == 0)
         StackPtr =
           DAG.getCopyFromReg(Chain, dl,
-                             (TFI->hasFP(MF) ?
+                             (RegInfo->hasFP(MF) ?
                               SystemZ::R11D : SystemZ::R15D),
                              getPointerTy());
 
@@ -441,7 +441,7 @@ SystemZTargetLowering::LowerCCCCallTo(SDValue Chain, SDValue Callee,
                                    DAG.getIntPtrConstant(Offset));
 
       MemOpChains.push_back(DAG.getStore(Chain, dl, Arg, PtrOff,
-                                         MachinePointerInfo(),
+                                         PseudoSourceValue::getStack(), Offset,
                                          false, false, 0));
     }
   }
@@ -747,7 +747,7 @@ SDValue SystemZTargetLowering::LowerGlobalAddress(SDValue Op,
 
   if (ExtraLoadRequired)
     Result = DAG.getLoad(getPointerTy(), dl, DAG.getEntryNode(), Result,
-                         MachinePointerInfo::getGOT(), false, false, 0);
+                         PseudoSourceValue::getGOT(), 0, false, false, 0);
 
   // If there was a non-zero offset that we didn't fold, create an explicit
   // addition for it.

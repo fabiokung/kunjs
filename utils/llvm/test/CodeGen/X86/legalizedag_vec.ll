@@ -1,4 +1,5 @@
-; RUN: llc < %s -march=x86 -mattr=sse2 -disable-mmx | FileCheck %s
+; RUN: llc < %s -march=x86 -mattr=sse2 -disable-mmx -o %t
+; RUN: grep {call.*divdi3}  %t | count 2
 
 
 ; Test case for r63760 where we generate a legalization assert that an illegal
@@ -11,7 +12,4 @@
 define <2 x i64> @test_long_div(<2 x i64> %num, <2 x i64> %div) {
   %div.r = sdiv <2 x i64> %num, %div
   ret <2 x i64>  %div.r
-}
-
-; CHECK: call{{.*(divdi3|alldiv)}}
-; CHECK: call{{.*(divdi3|alldiv)}}
+}                                     

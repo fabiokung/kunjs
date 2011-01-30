@@ -36,13 +36,13 @@
 #include "llvm/DerivedTypes.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Instructions.h"
-#include "llvm/LLVMContext.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AliasSetTracker.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/Dominators.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 #include "llvm/Support/CFG.h"
@@ -66,9 +66,7 @@ DisablePromotion("disable-licm-promotion", cl::Hidden,
 namespace {
   struct LICM : public LoopPass {
     static char ID; // Pass identification, replacement for typeid
-    LICM() : LoopPass(ID) {
-      initializeLICMPass(*PassRegistry::getPassRegistry());
-    }
+    LICM() : LoopPass(ID) {}
 
     virtual bool runOnLoop(Loop *L, LPPassManager &LPM);
 
@@ -82,7 +80,7 @@ namespace {
       AU.addRequiredID(LoopSimplifyID);
       AU.addRequired<AliasAnalysis>();
       AU.addPreserved<AliasAnalysis>();
-      AU.addPreserved("scalar-evolution");
+      AU.addPreserved<ScalarEvolution>();
       AU.addPreservedID(LoopSimplifyID);
     }
 
@@ -189,13 +187,13 @@ namespace {
     /// pointerInvalidatedByLoop - Return true if the body of this loop may
     /// store into the memory location pointed to by V.
     ///
-    bool pointerInvalidatedByLoop(Value *V, uint64_t Size,
-                                  const MDNode *TBAAInfo) {
+    bool pointerInvalidatedByLoop(Value *V, unsigned Size) {
       // Check to see if any of the basic blocks in CurLoop invalidate *V.
-      return CurAST->getAliasSetForPointer(V, Size, TBAAInfo).isMod();
+      return CurAST->getAliasSetForPointer(V, Size).isMod();
     }
 
     bool canSinkOrHoistInst(Instruction &I);
+    bool isLoopInvariantInst(Instruction &I);
     bool isNotUsedInLoop(Instruction &I);
 
     void PromoteAliasSet(AliasSet &AS);
@@ -203,12 +201,7 @@ namespace {
 }
 
 char LICM::ID = 0;
-INITIALIZE_PASS_BEGIN(LICM, "licm", "Loop Invariant Code Motion", false, false)
-INITIALIZE_PASS_DEPENDENCY(DominatorTree)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_END(LICM, "licm", "Loop Invariant Code Motion", false, false)
+INITIALIZE_PASS(LICM, "licm", "Loop Invariant Code Motion", false, false);
 
 Pass *llvm::createLICMPass() { return new LICM(); }
 
@@ -376,7 +369,7 @@ void LICM::HoistRegion(DomTreeNode *N) {
       // if all of the operands of the instruction are loop invariant and if it
       // is safe to hoist the instruction.
       //
-      if (CurLoop->hasLoopInvariantOperands(&I) && canSinkOrHoistInst(I) &&
+      if (isLoopInvariantInst(I) && canSinkOrHoistInst(I) &&
           isSafeToExecuteUnconditionally(I))
         hoist(I);
     }
@@ -401,17 +394,16 @@ bool LICM::canSinkOrHoistInst(Instruction &I) {
       return true;
     
     // Don't hoist loads which have may-aliased stores in loop.
-    uint64_t Size = 0;
+    unsigned Size = 0;
     if (LI->getType()->isSized())
       Size = AA->getTypeStoreSize(LI->getType());
-    return !pointerInvalidatedByLoop(LI->getOperand(0), Size,
-                                     LI->getMetadata(LLVMContext::MD_tbaa));
+    return !pointerInvalidatedByLoop(LI->getOperand(0), Size);
   } else if (CallInst *CI = dyn_cast<CallInst>(&I)) {
     // Handle obvious cases efficiently.
     AliasAnalysis::ModRefBehavior Behavior = AA->getModRefBehavior(CI);
     if (Behavior == AliasAnalysis::DoesNotAccessMemory)
       return true;
-    if (AliasAnalysis::onlyReadsMemory(Behavior)) {
+    else if (Behavior == AliasAnalysis::OnlyReadsMemory) {
       // If this call only reads from memory and there are no writes to memory
       // in the loop, we can hoist or sink the call as appropriate.
       bool FoundMod = false;
@@ -459,6 +451,20 @@ bool LICM::isNotUsedInLoop(Instruction &I) {
   return true;
 }
 
+
+/// isLoopInvariantInst - Return true if all operands of this instruction are
+/// loop invariant.  We also filter out non-hoistable instructions here just for
+/// efficiency.
+///
+bool LICM::isLoopInvariantInst(Instruction &I) {
+  // The instruction is loop invariant if all of its operands are loop-invariant
+  for (unsigned i = 0, e = I.getNumOperands(); i != e; ++i)
+    if (!CurLoop->isLoopInvariant(I.getOperand(i)))
+      return false;
+
+  // If we got this far, the instruction is loop invariant!
+  return true;
+}
 
 /// sink - When an instruction is found to only be used outside of the loop,
 /// this function moves it to the exit blocks and patches up SSA form as needed.

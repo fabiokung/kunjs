@@ -24,10 +24,9 @@
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Metadata.h"
-#include "llvm/Analysis/AliasSetTracker.h"
 #include "llvm/Analysis/DebugInfo.h"
 #include "llvm/Analysis/Dominators.h"
-#include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/Analysis/AliasSetTracker.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -265,7 +264,8 @@ namespace {
     void RenamePass(BasicBlock *BB, BasicBlock *Pred,
                     RenamePassData::ValVector &IncVals,
                     std::vector<RenamePassData> &Worklist);
-    bool QueuePhiNode(BasicBlock *BB, unsigned AllocaIdx, unsigned &Version);
+    bool QueuePhiNode(BasicBlock *BB, unsigned AllocaIdx, unsigned &Version,
+                      SmallPtrSet<PHINode*, 16> &InsertedPHINodes);
   };
   
   struct AllocaInfo {
@@ -509,9 +509,9 @@ void PromoteMem2Reg::run() {
     for (DenseMap<std::pair<BasicBlock*, unsigned>, PHINode*>::iterator I =
            NewPhiNodes.begin(), E = NewPhiNodes.end(); I != E;) {
       PHINode *PN = I->second;
-
+      
       // If this PHI node merges one value and/or undefs, get the value.
-      if (Value *V = SimplifyInstruction(PN, 0, &DT)) {
+      if (Value *V = PN->hasConstantValue(&DT)) {
         if (AST && PN->getType()->isPointerTy())
           AST->deleteValue(PN);
         PN->replaceAllUsesWith(V);
@@ -676,6 +676,7 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
   // Compute the locations where PhiNodes need to be inserted.  Look at the
   // dominance frontier of EACH basic-block we have a write in.
   unsigned CurrentVersion = 0;
+  SmallPtrSet<PHINode*, 16> InsertedPHINodes;
   std::vector<std::pair<unsigned, BasicBlock*> > DFBlocks;
   while (!Info.DefiningBlocks.empty()) {
     BasicBlock *BB = Info.DefiningBlocks.back();
@@ -708,7 +709,7 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
     
     for (unsigned i = 0, e = DFBlocks.size(); i != e; ++i) {
       BasicBlock *BB = DFBlocks[i].second;
-      if (QueuePhiNode(BB, AllocaNum, CurrentVersion))
+      if (QueuePhiNode(BB, AllocaNum, CurrentVersion, InsertedPHINodes))
         Info.DefiningBlocks.push_back(BB);
     }
     DFBlocks.clear();
@@ -899,7 +900,8 @@ void PromoteMem2Reg::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
 // Alloca returns true if there wasn't already a phi-node for that variable
 //
 bool PromoteMem2Reg::QueuePhiNode(BasicBlock *BB, unsigned AllocaNo,
-                                  unsigned &Version) {
+                                  unsigned &Version,
+                                  SmallPtrSet<PHINode*, 16> &InsertedPHINodes) {
   // Look up the basic-block in question.
   PHINode *&PN = NewPhiNodes[std::make_pair(BB, AllocaNo)];
 
@@ -914,6 +916,8 @@ bool PromoteMem2Reg::QueuePhiNode(BasicBlock *BB, unsigned AllocaNo,
   ++NumPHIInsert;
   PhiToAllocaMap[PN] = AllocaNo;
   PN->reserveOperandSpace(getNumPreds(BB));
+  
+  InsertedPHINodes.insert(PN);
 
   if (AST && PN->getType()->isPointerTy())
     AST->copyValue(PointerAllocaValues[AllocaNo], PN);

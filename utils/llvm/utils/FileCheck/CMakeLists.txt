@@ -2,7 +2,7 @@ add_executable(FileCheck
   FileCheck.cpp
   )
 
-target_link_libraries(FileCheck LLVMSupport)
+target_link_libraries(FileCheck LLVMSupport LLVMSystem)
 if( MINGW )
   target_link_libraries(FileCheck imagehlp psapi)
 endif( MINGW )

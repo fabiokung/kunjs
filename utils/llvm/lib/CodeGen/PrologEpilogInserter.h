@@ -36,9 +36,7 @@ namespace llvm {
   class PEI : public MachineFunctionPass {
   public:
     static char ID;
-    PEI() : MachineFunctionPass(ID) {
-      initializePEIPass(*PassRegistry::getPassRegistry());
-    }
+    PEI() : MachineFunctionPass(ID) {}
 
     const char *getPassName() const {
       return "Prolog/Epilog Insertion & Frame Finalization";

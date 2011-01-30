@@ -34,9 +34,7 @@ namespace {
     bool runOnModule(Module &M);
   public:
     static char ID; // Pass identification, replacement for typeid
-    EdgeProfiler() : ModulePass(ID) {
-      initializeEdgeProfilerPass(*PassRegistry::getPassRegistry());
-    }
+    EdgeProfiler() : ModulePass(ID) {}
 
     virtual const char *getPassName() const {
       return "Edge Profiler";
@@ -46,7 +44,7 @@ namespace {
 
 char EdgeProfiler::ID = 0;
 INITIALIZE_PASS(EdgeProfiler, "insert-edge-profiling",
-                "Insert instrumentation for edge profiling", false, false)
+                "Insert instrumentation for edge profiling", false, false);
 
 ModulePass *llvm::createEdgeProfilerPass() { return new EdgeProfiler(); }
 

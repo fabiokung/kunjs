@@ -20,8 +20,8 @@ bb:                                               ; preds = %entry
 return:                                           ; preds = %entry
   ret void
 ; CHECK: memcmp2:
-; CHECK: movw    (%rdi), %ax
-; CHECK: cmpw    (%rsi), %ax
+; CHECK: movw    (%rsi), %ax
+; CHECK: cmpw    %ax, (%rdi)
 }
 
 define void @memcmp2a(i8* %X, i32* nocapture %P) nounwind {
@@ -54,8 +54,8 @@ bb:                                               ; preds = %entry
 return:                                           ; preds = %entry
   ret void
 ; CHECK: memcmp4:
-; CHECK: movl    (%rdi), %eax
-; CHECK: cmpl    (%rsi), %eax
+; CHECK: movl    (%rsi), %eax
+; CHECK: cmpl    %eax, (%rdi)
 }
 
 define void @memcmp4a(i8* %X, i32* nocapture %P) nounwind {
@@ -87,8 +87,8 @@ bb:                                               ; preds = %entry
 return:                                           ; preds = %entry
   ret void
 ; CHECK: memcmp8:
-; CHECK: movq    (%rdi), %rax
-; CHECK: cmpq    (%rsi), %rax
+; CHECK: movq    (%rsi), %rax
+; CHECK: cmpq    %rax, (%rdi)
 }
 
 define void @memcmp8a(i8* %X, i32* nocapture %P) nounwind {

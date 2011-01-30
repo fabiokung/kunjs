@@ -209,6 +209,9 @@ bool llvm::isInstructionTriviallyDead(Instruction *I) {
   // We don't want debug info removed by anything this general.
   if (isa<DbgInfoIntrinsic>(I)) return false;
 
+  // Likewise for memory use markers.
+  if (isa<MemoryUseIntrinsic>(I)) return false;
+
   if (!I->mayHaveSideEffects()) return true;
 
   // Special case intrinsics that "may have side effects" but can be deleted
@@ -343,13 +346,13 @@ void llvm::RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred,
   WeakVH PhiIt = &BB->front();
   while (PHINode *PN = dyn_cast<PHINode>(PhiIt)) {
     PhiIt = &*++BasicBlock::iterator(cast<Instruction>(PhiIt));
-
-    Value *PNV = SimplifyInstruction(PN, TD);
+    
+    Value *PNV = PN->hasConstantValue();
     if (PNV == 0) continue;
-
+    
     // If we're able to simplify the phi to a single value, substitute the new
     // value into all of its uses.
-    assert(PNV != PN && "SimplifyInstruction broken!");
+    assert(PNV != PN && "hasConstantValue broken");
     
     Value *OldPhiIt = PhiIt;
     ReplaceAndSimplifyAllUses(PN, PNV, TD);

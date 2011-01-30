@@ -130,25 +130,21 @@ void CriticalAntiDepBreaker::Observe(MachineInstr *MI, unsigned Count,
     return;
   assert(Count < InsertPosIndex && "Instruction index out of expected range!");
 
-  for (unsigned Reg = 0; Reg != TRI->getNumRegs(); ++Reg) {
-    if (KillIndices[Reg] != ~0u) {
-      // If Reg is currently live, then mark that it can't be renamed as
-      // we don't know the extent of its live-range anymore (now that it
-      // has been scheduled).
-      Classes[Reg] = reinterpret_cast<TargetRegisterClass *>(-1);
-      KillIndices[Reg] = Count;
-    } else if (DefIndices[Reg] < InsertPosIndex && DefIndices[Reg] >= Count) {
-      // Any register which was defined within the previous scheduling region
-      // may have been rescheduled and its lifetime may overlap with registers
-      // in ways not reflected in our current liveness state. For each such
-      // register, adjust the liveness state to be conservatively correct.
+  // Any register which was defined within the previous scheduling region
+  // may have been rescheduled and its lifetime may overlap with registers
+  // in ways not reflected in our current liveness state. For each such
+  // register, adjust the liveness state to be conservatively correct.
+  for (unsigned Reg = 0; Reg != TRI->getNumRegs(); ++Reg)
+    if (DefIndices[Reg] < InsertPosIndex && DefIndices[Reg] >= Count) {
+      assert(KillIndices[Reg] == ~0u && "Clobbered register is live!");
+
+      // Mark this register to be non-renamable.
       Classes[Reg] = reinterpret_cast<TargetRegisterClass *>(-1);
 
       // Move the def index to the end of the previous region, to reflect
       // that the def could theoretically have been scheduled at the end.
       DefIndices[Reg] = InsertPosIndex;
     }
-  }
 
   PrescanInstruction(MI);
   ScanInstruction(MI, Count);
@@ -181,7 +177,7 @@ void CriticalAntiDepBreaker::PrescanInstruction(MachineInstr *MI) {
   // that have special allocation requirements. Also assume all registers
   // used in a call must not be changed (ABI).
   // FIXME: The issue with predicated instruction is more complex. We are being
-  // conservative here because the kill markers cannot be trusted after
+  // conservatively here because the kill markers cannot be trusted after
   // if-conversion:
   // %R6<def> = LDR %SP, %reg0, 92, pred:14, pred:%reg0; mem:LD4[FixedStack14]
   // ...
@@ -325,25 +321,8 @@ void CriticalAntiDepBreaker::ScanInstruction(MachineInstr *MI,
   }
 }
 
-// Check all machine instructions that define the antidependent register.
-// Return true if any of these instructions define the new register.
-bool
-CriticalAntiDepBreaker::isNewRegModifiedByRefs(RegRefIter RegRefBegin,
-                                               RegRefIter RegRefEnd,
-                                               unsigned NewReg)
-{
-  for (RegRefIter I = RegRefBegin; I != RegRefEnd; ++I ) {
-    MachineOperand *MO = I->second;
-    if (MO->isDef()) continue;
-    if (MO->getParent()->modifiesRegister(NewReg, TRI))
-      return true;
-  }
-  return false;
-}
-
 unsigned
-CriticalAntiDepBreaker::findSuitableFreeRegister(RegRefIter RegRefBegin,
-                                                 RegRefIter RegRefEnd,
+CriticalAntiDepBreaker::findSuitableFreeRegister(MachineInstr *MI,
                                                  unsigned AntiDepReg,
                                                  unsigned LastNewReg,
                                                  const TargetRegisterClass *RC)
@@ -359,10 +338,10 @@ CriticalAntiDepBreaker::findSuitableFreeRegister(RegRefIter RegRefBegin,
     // an anti-dependence with this AntiDepReg, because that would
     // re-introduce that anti-dependence.
     if (NewReg == LastNewReg) continue;
-    // If any instructions that define AntiDepReg also define the NewReg, it's
-    // not suitable.  For example, Instruction with multiple definitions can
-    // result in this condition.
-    if (isNewRegModifiedByRefs(RegRefBegin, RegRefEnd, NewReg)) continue;
+    // If the instruction already has a def of the NewReg, it's not suitable.
+    // For example, Instruction with multiple definitions can result in this
+    // condition.
+    if (MI->modifiesRegister(NewReg, TRI)) continue;
     // If NewReg is dead and NewReg's most recent def is not before
     // AntiDepReg's kill, it's safe to replace AntiDepReg with NewReg.
     assert(((KillIndices[AntiDepReg] == ~0u) != (DefIndices[AntiDepReg] == ~0u))
@@ -569,11 +548,7 @@ BreakAntiDependencies(const std::vector<SUnit>& SUnits,
     // TODO: Instead of picking the first free register, consider which might
     // be the best.
     if (AntiDepReg != 0) {
-      std::pair<std::multimap<unsigned, MachineOperand *>::iterator,
-                std::multimap<unsigned, MachineOperand *>::iterator>
-        Range = RegRefs.equal_range(AntiDepReg);
-      if (unsigned NewReg = findSuitableFreeRegister(Range.first, Range.second,
-                                                     AntiDepReg,
+      if (unsigned NewReg = findSuitableFreeRegister(MI, AntiDepReg,
                                                      LastNewReg[AntiDepReg],
                                                      RC)) {
         DEBUG(dbgs() << "Breaking anti-dependence edge on "
@@ -583,6 +558,9 @@ BreakAntiDependencies(const std::vector<SUnit>& SUnits,
 
         // Update the references to the old register to refer to the new
         // register.
+        std::pair<std::multimap<unsigned, MachineOperand *>::iterator,
+                  std::multimap<unsigned, MachineOperand *>::iterator>
+           Range = RegRefs.equal_range(AntiDepReg);
         for (std::multimap<unsigned, MachineOperand *>::iterator
              Q = Range.first, QE = Range.second; Q != QE; ++Q) {
           Q->second->setReg(NewReg);
@@ -602,7 +580,7 @@ BreakAntiDependencies(const std::vector<SUnit>& SUnits,
         }
 
         // We just went back in time and modified history; the
-        // liveness information for the anti-dependence reg is now
+        // liveness information for the anti-depenence reg is now
         // inconsistent. Set the state as if it were dead.
         Classes[NewReg] = Classes[AntiDepReg];
         DefIndices[NewReg] = DefIndices[AntiDepReg];

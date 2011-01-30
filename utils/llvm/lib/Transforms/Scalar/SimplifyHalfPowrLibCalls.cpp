@@ -32,9 +32,7 @@ namespace {
     const TargetData *TD;
   public:
     static char ID; // Pass identification
-    SimplifyHalfPowrLibCalls() : FunctionPass(ID) {
-      initializeSimplifyHalfPowrLibCallsPass(*PassRegistry::getPassRegistry());
-    }
+    SimplifyHalfPowrLibCalls() : FunctionPass(ID) {}
 
     bool runOnFunction(Function &F);
 
@@ -49,7 +47,7 @@ namespace {
 } // end anonymous namespace.
 
 INITIALIZE_PASS(SimplifyHalfPowrLibCalls, "simplify-libcalls-halfpowr",
-                "Simplify half_powr library calls", false, false)
+                "Simplify half_powr library calls", false, false);
 
 // Public interface to the Simplify HalfPowr LibCalls pass.
 FunctionPass *llvm::createSimplifyHalfPowrLibCallsPass() {

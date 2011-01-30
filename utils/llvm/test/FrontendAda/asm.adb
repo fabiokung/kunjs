@@ -1,4 +1,4 @@
--- RUN: %llvmgcc -S %s
+-- RUN: %llvmgcc -c %s
 with System.Machine_Code;
 procedure Asm is
 begin

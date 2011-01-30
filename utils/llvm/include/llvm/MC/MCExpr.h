@@ -11,12 +11,11 @@
 #define LLVM_MC_MCEXPR_H
 
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
 class MCAsmInfo;
 class MCAsmLayout;
-class MCAssembler;
 class MCContext;
 class MCSymbol;
 class MCValue;
@@ -44,9 +43,6 @@ private:
 protected:
   explicit MCExpr(ExprKind _Kind) : Kind(_Kind) {}
 
-  bool EvaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
-                                 const MCAsmLayout *Layout,
-                                 bool InSet) const;
 public:
   /// @name Accessors
   /// @{
@@ -71,11 +67,7 @@ public:
   /// values. If not given, then only non-symbolic expressions will be
   /// evaluated.
   /// @result - True on success.
-  bool EvaluateAsAbsolute(int64_t &Res) const;
-  bool EvaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm) const;
-  bool EvaluateAsAbsolute(int64_t &Res, const MCAsmLayout *Layout) const;
-  bool EvaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm,
-                          const MCAsmLayout *Layout) const;
+  bool EvaluateAsAbsolute(int64_t &Res, const MCAsmLayout *Layout = 0) const;
 
   /// EvaluateAsRelocatable - Try to evaluate the expression to a relocatable
   /// value, i.e. an expression of the fixed form (a - b + constant).
@@ -140,27 +132,12 @@ public:
     VK_GOTTPOFF,
     VK_INDNTPOFF,
     VK_NTPOFF,
-    VK_GOTNTPOFF,
     VK_PLT,
     VK_TLSGD,
-    VK_TLSLD,
-    VK_TLSLDM,
     VK_TPOFF,
-    VK_DTPOFF,
-    VK_TLVP,      // Mach-O thread local variable relocation
-    VK_ARM_HI16,  // The R_ARM_MOVT_ABS relocation (:upper16: in the .s file)
-    VK_ARM_LO16,  // The R_ARM_MOVW_ABS_NC relocation (:lower16: in the .w file)
-    // FIXME: We'd really like to use the generic Kinds listed above for these.
-    VK_ARM_PLT,   // ARM-style PLT references. i.e., (PLT) instead of @PLT
-    VK_ARM_TLSGD, //   ditto for TLSGD, GOT, GOTOFF, TPOFF and GOTTPOFF
-    VK_ARM_GOT,
-    VK_ARM_GOTOFF,
-    VK_ARM_TPOFF,
-    VK_ARM_GOTTPOFF,
-    
-    VK_PPC_TOC,
-    VK_PPC_HA16,  // ha16(symbol)
-    VK_PPC_LO16   // lo16(symbol)
+    VK_ARM_HI16, // The R_ARM_MOVT_ABS relocation (:upper16: in the asm file)
+    VK_ARM_LO16, // The R_ARM_MOVW_ABS_NC relocation (:lower16: in the asm file)
+    VK_TLVP // Mach-O thread local variable relocation
   };
 
 private:

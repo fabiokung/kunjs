@@ -12,14 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "regalloc"
-#include "LiveDebugVariables.h"
 #include "VirtRegMap.h"
 #include "VirtRegRewriter.h"
 #include "Spiller.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Function.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "llvm/CodeGen/LiveStackAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
@@ -92,19 +91,6 @@ namespace {
   struct RALinScan : public MachineFunctionPass {
     static char ID;
     RALinScan() : MachineFunctionPass(ID) {
-      initializeLiveDebugVariablesPass(*PassRegistry::getPassRegistry());
-      initializeLiveIntervalsPass(*PassRegistry::getPassRegistry());
-      initializeStrongPHIEliminationPass(*PassRegistry::getPassRegistry());
-      initializeRegisterCoalescerAnalysisGroup(
-        *PassRegistry::getPassRegistry());
-      initializeCalculateSpillWeightsPass(*PassRegistry::getPassRegistry());
-      initializePreAllocSplittingPass(*PassRegistry::getPassRegistry());
-      initializeLiveStacksPass(*PassRegistry::getPassRegistry());
-      initializeMachineDominatorTreePass(*PassRegistry::getPassRegistry());
-      initializeMachineLoopInfoPass(*PassRegistry::getPassRegistry());
-      initializeVirtRegMapPass(*PassRegistry::getPassRegistry());
-      initializeMachineDominatorTreePass(*PassRegistry::getPassRegistry());
-      
       // Initialize the queue to record recently-used registers.
       if (NumRecentlyUsedRegs > 0)
         RecentRegs.resize(NumRecentlyUsedRegs, 0);
@@ -141,6 +127,7 @@ namespace {
     BitVector allocatableRegs_;
     BitVector reservedRegs_;
     LiveIntervals* li_;
+    LiveStacks* ls_;
     MachineLoopInfo *loopInfo;
 
     /// handled_ - Intervals are added to the handled_ set in the order of their
@@ -196,8 +183,6 @@ namespace {
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       AU.setPreservesCFG();
-      AU.addRequired<AliasAnalysis>();
-      AU.addPreserved<AliasAnalysis>();
       AU.addRequired<LiveIntervals>();
       AU.addPreserved<SlotIndexes>();
       if (StrongPHIElim)
@@ -208,15 +193,12 @@ namespace {
       AU.addRequired<CalculateSpillWeights>();
       if (PreSplitIntervals)
         AU.addRequiredID(PreAllocSplittingID);
-      AU.addRequiredID(LiveStacksID);
-      AU.addPreservedID(LiveStacksID);
+      AU.addRequired<LiveStacks>();
+      AU.addPreserved<LiveStacks>();
       AU.addRequired<MachineLoopInfo>();
       AU.addPreserved<MachineLoopInfo>();
       AU.addRequired<VirtRegMap>();
       AU.addPreserved<VirtRegMap>();
-      AU.addRequired<LiveDebugVariables>();
-      AU.addPreserved<LiveDebugVariables>();
-      AU.addRequiredID(MachineDominatorsID);
       AU.addPreservedID(MachineDominatorsID);
       MachineFunctionPass::getAnalysisUsage(AU);
     }
@@ -388,19 +370,8 @@ namespace {
   char RALinScan::ID = 0;
 }
 
-INITIALIZE_PASS_BEGIN(RALinScan, "linearscan-regalloc",
-                "Linear Scan Register Allocator", false, false)
-INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
-INITIALIZE_PASS_DEPENDENCY(StrongPHIElimination)
-INITIALIZE_PASS_DEPENDENCY(CalculateSpillWeights)
-INITIALIZE_PASS_DEPENDENCY(PreAllocSplitting)
-INITIALIZE_PASS_DEPENDENCY(LiveStacks)
-INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_DEPENDENCY(VirtRegMap)
-INITIALIZE_AG_DEPENDENCY(RegisterCoalescer)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_END(RALinScan, "linearscan-regalloc",
-                "Linear Scan Register Allocator", false, false)
+INITIALIZE_PASS(RALinScan, "linearscan-regalloc",
+                "Linear Scan Register Allocator", false, false);
 
 void RALinScan::ComputeRelatedRegClasses() {
   // First pass, add all reg classes to the union, and determine at least one
@@ -460,7 +431,8 @@ unsigned RALinScan::attemptTrivialCoalescing(LiveInterval &cur, unsigned Reg) {
   unsigned CandReg;
   {
     MachineInstr *CopyMI;
-    if ((CopyMI = li_->getInstructionFromIndex(vni->def)) && CopyMI->isCopy())
+    if (vni->def != SlotIndex() && vni->isDefAccurate() &&
+        (CopyMI = li_->getInstructionFromIndex(vni->def)) && CopyMI->isCopy())
       // Defined by a copy, try to extend SrcReg forward
       CandReg = CopyMI->getOperand(1).getReg();
     else if (TrivCoalesceEnds &&
@@ -469,10 +441,6 @@ unsigned RALinScan::attemptTrivialCoalescing(LiveInterval &cur, unsigned Reg) {
       // Only used by a copy, try to extend DstReg backwards
       CandReg = CopyMI->getOperand(0).getReg();
     else
-      return Reg;
-
-    // If the target of the copy is a sub-register then don't coalesce.
-    if(CopyMI->getOperand(0).getSubReg())
       return Reg;
   }
 
@@ -510,6 +478,7 @@ bool RALinScan::runOnMachineFunction(MachineFunction &fn) {
   allocatableRegs_ = tri_->getAllocatableSet(fn);
   reservedRegs_ = tri_->getReservedRegs(fn);
   li_ = &getAnalysis<LiveIntervals>();
+  ls_ = &getAnalysis<LiveStacks>();
   loopInfo = &getAnalysis<MachineLoopInfo>();
 
   // We don't run the coalescer here because we have no reason to
@@ -535,9 +504,6 @@ bool RALinScan::runOnMachineFunction(MachineFunction &fn) {
 
   // Rewrite spill code and update the PhysRegsUsed set.
   rewriter_->runOnMachineFunction(*mf_, *vrm_, li_);
-
-  // Write out new DBG_VALUE instructions.
-  getAnalysis<LiveDebugVariables>().emitDebugValues(vrm_);
 
   assert(unhandled_.empty() && "Unhandled live intervals remain!");
 
@@ -672,6 +638,8 @@ void RALinScan::linearScan() {
 
   // Look for physical registers that end up not being allocated even though
   // register allocator had to spill other registers in its register class.
+  if (ls_->getNumIntervals() == 0)
+    return;
   if (!vrm_->FindUnusedRegisters(li_))
     return;
 }
@@ -814,6 +782,30 @@ static void RevertVectorIteratorsTo(RALinScan::IntervalPtrs &V,
     if (I != IP.first->begin()) --I;
     IP.second = I;
   }
+}
+
+/// addStackInterval - Create a LiveInterval for stack if the specified live
+/// interval has been spilled.
+static void addStackInterval(LiveInterval *cur, LiveStacks *ls_,
+                             LiveIntervals *li_,
+                             MachineRegisterInfo* mri_, VirtRegMap &vrm_) {
+  int SS = vrm_.getStackSlot(cur->reg);
+  if (SS == VirtRegMap::NO_STACK_SLOT)
+    return;
+
+  const TargetRegisterClass *RC = mri_->getRegClass(cur->reg);
+  LiveInterval &SI = ls_->getOrCreateInterval(SS, RC);
+
+  VNInfo *VNI;
+  if (SI.hasAtLeastOneValue())
+    VNI = SI.getValNumInfo(0);
+  else
+    VNI = SI.getNextValue(SlotIndex(), 0, false,
+                          ls_->getVNInfoAllocator());
+
+  LiveInterval &RI = li_->getInterval(cur->reg);
+  // FIXME: This may be overly conservative.
+  SI.MergeRangesInAsValue(RI, VNI);
 }
 
 /// getConflictWeight - Return the number of conflicts between cur
@@ -965,11 +957,10 @@ namespace {
 /// assignRegOrStackSlotAtInterval - assign a register if one is available, or
 /// spill.
 void RALinScan::assignRegOrStackSlotAtInterval(LiveInterval* cur) {
-  const TargetRegisterClass *RC = mri_->getRegClass(cur->reg);
-  DEBUG(dbgs() << "\tallocating current interval from "
-               << RC->getName() << ": ");
+  DEBUG(dbgs() << "\tallocating current interval: ");
 
   // This is an implicitly defined live interval, just assign any register.
+  const TargetRegisterClass *RC = mri_->getRegClass(cur->reg);
   if (cur->empty()) {
     unsigned physReg = vrm_->getRegAllocPref(cur->reg);
     if (!physReg)
@@ -993,7 +984,8 @@ void RALinScan::assignRegOrStackSlotAtInterval(LiveInterval* cur) {
   // one, e.g. X86::mov32to32_. These move instructions are not coalescable.
   if (!vrm_->getRegAllocPref(cur->reg) && cur->hasAtLeastOneValue()) {
     VNInfo *vni = cur->begin()->valno;
-    if (!vni->isUnused()) {
+    if ((vni->def != SlotIndex()) && !vni->isUnused() &&
+         vni->isDefAccurate()) {
       MachineInstr *CopyMI = li_->getInstructionFromIndex(vni->def);
       if (CopyMI && CopyMI->isCopy()) {
         unsigned DstSubReg = CopyMI->getOperand(0).getSubReg();
@@ -1233,6 +1225,7 @@ void RALinScan::assignRegOrStackSlotAtInterval(LiveInterval* cur) {
     spiller_->spill(cur, added, spillIs);
 
     std::sort(added.begin(), added.end(), LISorter());
+    addStackInterval(cur, ls_, li_, mri_, *vrm_);
     if (added.empty())
       return;  // Early exit if all spills were folded.
 
@@ -1307,6 +1300,7 @@ void RALinScan::assignRegOrStackSlotAtInterval(LiveInterval* cur) {
     if (sli->beginIndex() < earliestStart)
       earliestStart = sli->beginIndex();
     spiller_->spill(sli, added, spillIs);
+    addStackInterval(sli, ls_, li_, mri_, *vrm_);
     spilled.insert(sli->reg);
   }
 

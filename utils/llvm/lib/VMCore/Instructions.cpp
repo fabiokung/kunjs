@@ -19,6 +19,7 @@
 #include "llvm/Instructions.h"
 #include "llvm/Module.h"
 #include "llvm/Operator.h"
+#include "llvm/Analysis/Dominators.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/ConstantRange.h"
@@ -163,13 +164,61 @@ void PHINode::resizeOperands(unsigned NumOps) {
 
 /// hasConstantValue - If the specified PHI node always merges together the same
 /// value, return the value, otherwise return null.
-Value *PHINode::hasConstantValue() const {
-  // Exploit the fact that phi nodes always have at least one entry.
-  Value *ConstantValue = getIncomingValue(0);
-  for (unsigned i = 1, e = getNumIncomingValues(); i != e; ++i)
-    if (getIncomingValue(i) != ConstantValue)
-      return 0; // Incoming values not all the same.
-  return ConstantValue;
+///
+/// If the PHI has undef operands, but all the rest of the operands are
+/// some unique value, return that value if it can be proved that the
+/// value dominates the PHI. If DT is null, use a conservative check,
+/// otherwise use DT to test for dominance.
+///
+Value *PHINode::hasConstantValue(DominatorTree *DT) const {
+  // If the PHI node only has one incoming value, eliminate the PHI node.
+  if (getNumIncomingValues() == 1) {
+    if (getIncomingValue(0) != this)   // not  X = phi X
+      return getIncomingValue(0);
+    return UndefValue::get(getType());  // Self cycle is dead.
+  }
+      
+  // Otherwise if all of the incoming values are the same for the PHI, replace
+  // the PHI node with the incoming value.
+  //
+  Value *InVal = 0;
+  bool HasUndefInput = false;
+  for (unsigned i = 0, e = getNumIncomingValues(); i != e; ++i)
+    if (isa<UndefValue>(getIncomingValue(i))) {
+      HasUndefInput = true;
+    } else if (getIncomingValue(i) != this) { // Not the PHI node itself...
+      if (InVal && getIncomingValue(i) != InVal)
+        return 0;  // Not the same, bail out.
+      InVal = getIncomingValue(i);
+    }
+  
+  // The only case that could cause InVal to be null is if we have a PHI node
+  // that only has entries for itself.  In this case, there is no entry into the
+  // loop, so kill the PHI.
+  //
+  if (InVal == 0) InVal = UndefValue::get(getType());
+  
+  // If we have a PHI node like phi(X, undef, X), where X is defined by some
+  // instruction, we cannot always return X as the result of the PHI node.  Only
+  // do this if X is not an instruction (thus it must dominate the PHI block),
+  // or if the client is prepared to deal with this possibility.
+  if (!HasUndefInput || !isa<Instruction>(InVal))
+    return InVal;
+  
+  Instruction *IV = cast<Instruction>(InVal);
+  if (DT) {
+    // We have a DominatorTree. Do a precise test.
+    if (!DT->dominates(IV, this))
+      return 0;
+  } else {
+    // If it is in the entry block, it obviously dominates everything.
+    if (IV->getParent() != &IV->getParent()->getParent()->getEntryBlock() ||
+        isa<InvokeInst>(IV))
+      return 0;   // Cannot guarantee that InVal dominates this PHINode.
+  }
+
+  // All of the incoming values are the same, return the value now.
+  return InVal;
 }
 
 
@@ -850,7 +899,7 @@ void AllocaInst::setAlignment(unsigned Align) {
 
 bool AllocaInst::isArrayAllocation() const {
   if (ConstantInt *CI = dyn_cast<ConstantInt>(getOperand(0)))
-    return !CI->isOne();
+    return CI->getZExtValue() != 1;
   return true;
 }
 
@@ -2311,8 +2360,6 @@ bool CastInst::isCastable(const Type *SrcTy, const Type *DestTy) {
     } else {                                    // Casting from something else
       return false;
     }
-  } else if (DestTy->isX86_MMXTy()) {     
-    return SrcBits == 64;
   } else {                                      // Casting to something else
     return false;
   }
@@ -2394,10 +2441,6 @@ CastInst::getCastOpcode(
       return BitCast;                             // vector -> vector
     } else if (DestPTy->getBitWidth() == SrcBits) {
       return BitCast;                               // float/int -> vector
-    } else if (SrcTy->isX86_MMXTy()) {
-      assert(DestPTy->getBitWidth()==64 &&
-             "Casting X86_MMX to vector of wrong width");
-      return BitCast;                             // MMX to 64-bit vector
     } else {
       assert(!"Illegal cast to vector (wrong type or size)");
     }
@@ -2408,14 +2451,6 @@ CastInst::getCastOpcode(
       return IntToPtr;                              // int -> ptr
     } else {
       assert(!"Casting pointer to other than pointer or int");
-    }
-  } else if (DestTy->isX86_MMXTy()) {
-    if (isa<VectorType>(SrcTy)) {
-      assert(cast<VectorType>(SrcTy)->getBitWidth() == 64 &&
-             "Casting vector of wrong width to X86_MMX");
-      return BitCast;                               // 64-bit vector to MMX
-    } else {
-      assert(!"Illegal cast to X86_MMX");
     }
   } else {
     assert(!"Casting to type that is not first-class");
@@ -2939,9 +2974,9 @@ bool CmpInst::isFalseWhenEqual(unsigned short predicate) {
 //                        SwitchInst Implementation
 //===----------------------------------------------------------------------===//
 
-void SwitchInst::init(Value *Value, BasicBlock *Default, unsigned NumReserved) {
-  assert(Value && Default && NumReserved);
-  ReservedSpace = NumReserved;
+void SwitchInst::init(Value *Value, BasicBlock *Default, unsigned NumCases) {
+  assert(Value && Default);
+  ReservedSpace = 2+NumCases*2;
   NumOperands = 2;
   OperandList = allocHungoffUses(ReservedSpace);
 
@@ -2957,7 +2992,7 @@ SwitchInst::SwitchInst(Value *Value, BasicBlock *Default, unsigned NumCases,
                        Instruction *InsertBefore)
   : TerminatorInst(Type::getVoidTy(Value->getContext()), Instruction::Switch,
                    0, 0, InsertBefore) {
-  init(Value, Default, 2+NumCases*2);
+  init(Value, Default, NumCases);
 }
 
 /// SwitchInst ctor - Create a new switch instruction, specifying a value to
@@ -2968,15 +3003,14 @@ SwitchInst::SwitchInst(Value *Value, BasicBlock *Default, unsigned NumCases,
                        BasicBlock *InsertAtEnd)
   : TerminatorInst(Type::getVoidTy(Value->getContext()), Instruction::Switch,
                    0, 0, InsertAtEnd) {
-  init(Value, Default, 2+NumCases*2);
+  init(Value, Default, NumCases);
 }
 
 SwitchInst::SwitchInst(const SwitchInst &SI)
-  : TerminatorInst(SI.getType(), Instruction::Switch, 0, 0) {
-  init(SI.getCondition(), SI.getDefaultDest(), SI.getNumOperands());
-  NumOperands = SI.getNumOperands();
+  : TerminatorInst(Type::getVoidTy(SI.getContext()), Instruction::Switch,
+                   allocHungoffUses(SI.getNumOperands()), SI.getNumOperands()) {
   Use *OL = OperandList, *InOL = SI.OperandList;
-  for (unsigned i = 2, E = SI.getNumOperands(); i != E; i += 2) {
+  for (unsigned i = 0, E = SI.getNumOperands(); i != E; i+=2) {
     OL[i] = InOL[i];
     OL[i+1] = InOL[i+1];
   }

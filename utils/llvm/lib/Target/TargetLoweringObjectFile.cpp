@@ -45,7 +45,6 @@ TargetLoweringObjectFile::TargetLoweringObjectFile() : Ctx(0) {
   LSDASection = 0;
   EHFrameSection = 0;
 
-  CommDirectiveSupportsAlignment = true;
   DwarfAbbrevSection = 0;
   DwarfInfoSection = 0;
   DwarfLineSection = 0;

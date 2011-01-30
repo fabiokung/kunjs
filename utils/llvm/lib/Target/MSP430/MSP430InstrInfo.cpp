@@ -40,9 +40,8 @@ void MSP430InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   MachineFrameInfo &MFI = *MF.getFrameInfo();
 
   MachineMemOperand *MMO =
-    MF.getMachineMemOperand(
-              MachinePointerInfo(PseudoSourceValue::getFixedStack(FrameIdx)),
-                            MachineMemOperand::MOStore,
+    MF.getMachineMemOperand(PseudoSourceValue::getFixedStack(FrameIdx),
+                            MachineMemOperand::MOStore, 0,
                             MFI.getObjectSize(FrameIdx),
                             MFI.getObjectAlignment(FrameIdx));
 
@@ -69,9 +68,8 @@ void MSP430InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   MachineFrameInfo &MFI = *MF.getFrameInfo();
 
   MachineMemOperand *MMO =
-    MF.getMachineMemOperand(
-              MachinePointerInfo(PseudoSourceValue::getFixedStack(FrameIdx)),
-                            MachineMemOperand::MOLoad,
+    MF.getMachineMemOperand(PseudoSourceValue::getFixedStack(FrameIdx),
+                            MachineMemOperand::MOLoad, 0,
                             MFI.getObjectSize(FrameIdx),
                             MFI.getObjectAlignment(FrameIdx));
 
@@ -99,6 +97,48 @@ void MSP430InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   BuildMI(MBB, I, DL, get(Opc), DestReg)
     .addReg(SrcReg, getKillRegState(KillSrc));
+}
+
+bool
+MSP430InstrInfo::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
+                                           MachineBasicBlock::iterator MI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
+                                          const TargetRegisterInfo *TRI) const {
+  if (CSI.empty())
+    return false;
+
+  DebugLoc DL;
+  if (MI != MBB.end()) DL = MI->getDebugLoc();
+
+  MachineFunction &MF = *MBB.getParent();
+  MSP430MachineFunctionInfo *MFI = MF.getInfo<MSP430MachineFunctionInfo>();
+  MFI->setCalleeSavedFrameSize(CSI.size() * 2);
+
+  for (unsigned i = CSI.size(); i != 0; --i) {
+    unsigned Reg = CSI[i-1].getReg();
+    // Add the callee-saved register as live-in. It's killed at the spill.
+    MBB.addLiveIn(Reg);
+    BuildMI(MBB, MI, DL, get(MSP430::PUSH16r))
+      .addReg(Reg, RegState::Kill);
+  }
+  return true;
+}
+
+bool
+MSP430InstrInfo::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
+                                             MachineBasicBlock::iterator MI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
+                                          const TargetRegisterInfo *TRI) const {
+  if (CSI.empty())
+    return false;
+
+  DebugLoc DL;
+  if (MI != MBB.end()) DL = MI->getDebugLoc();
+
+  for (unsigned i = 0, e = CSI.size(); i != e; ++i)
+    BuildMI(MBB, MI, DL, get(MSP430::POP16r), CSI[i].getReg());
+
+  return true;
 }
 
 unsigned MSP430InstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {

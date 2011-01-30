@@ -1,5 +1,5 @@
-; RUN: lli %s > /dev/null
-; XFAIL: arm
+; RUN: llvm-as %s -o %t.bc
+; RUN: lli %t.bc > /dev/null
 
 declare void @exit(i32)
 

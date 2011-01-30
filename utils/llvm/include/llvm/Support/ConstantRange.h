@@ -33,7 +33,7 @@
 #define LLVM_SUPPORT_CONSTANT_RANGE_H
 
 #include "llvm/ADT/APInt.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
 
@@ -91,11 +91,6 @@ public:
   /// for example: [100, 8)
   ///
   bool isWrappedSet() const;
-
-  /// isSignWrappedSet - Return true if this set wraps around the INT_MIN of
-  /// its bitwidth, for example: i8 [120, 140).
-  ///
-  bool isSignWrappedSet() const;
 
   /// contains - Return true if the specified value is in the set.
   ///
@@ -223,14 +218,6 @@ public:
   /// from an unsigned division of a value in this range and a value in
   /// \p Other.
   ConstantRange udiv(const ConstantRange &Other) const;
-
-  /// binaryAnd - return a new range representing the possible values resulting
-  /// from a binary-and of a value in this range by a value in \p Other.
-  ConstantRange binaryAnd(const ConstantRange &Other) const;
-
-  /// binaryOr - return a new range representing the possible values resulting
-  /// from a binary-or of a value in this range by a value in \p Other.
-  ConstantRange binaryOr(const ConstantRange &Other) const;
 
   /// shl - Return a new range representing the possible values resulting
   /// from a left shift of a value in this range by a value in \p Other.

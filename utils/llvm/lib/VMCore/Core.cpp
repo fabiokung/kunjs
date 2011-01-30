@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the common infrastructure (including the C bindings)
-// for libLLVMCore.a, which implements the LLVM intermediate representation.
+// This file implements the C bindings for libLLVMCore.a, which implements
+// the LLVM intermediate representation.
 //
 //===----------------------------------------------------------------------===//
 
@@ -34,18 +34,6 @@
 
 using namespace llvm;
 
-void llvm::initializeCore(PassRegistry &Registry) {
-  initializeDominatorTreePass(Registry);
-  initializeDominanceFrontierPass(Registry);
-  initializePrintModulePassPass(Registry);
-  initializePrintFunctionPassPass(Registry);
-  initializeVerifierPass(Registry);
-  initializePreVerifierPass(Registry);
-}
-
-void LLVMInitializeCore(LLVMPassRegistryRef R) {
-  initializeCore(*unwrap(R));
-}
 
 /*===-- Error handling ----------------------------------------------------===*/
 
@@ -138,12 +126,6 @@ void LLVMSetModuleInlineAsm(LLVMModuleRef M, const char *Asm) {
 }
 
 
-/*--.. Operations on module contexts ......................................--*/
-LLVMContextRef LLVMGetModuleContext(LLVMModuleRef M) {
-  return wrap(&unwrap(M)->getContext());
-}
-
-
 /*===-- Operations on types -----------------------------------------------===*/
 
 /*--.. Operations on all types (mostly) ....................................--*/
@@ -182,8 +164,6 @@ LLVMTypeKind LLVMGetTypeKind(LLVMTypeRef Ty) {
     return LLVMOpaqueTypeKind;
   case Type::VectorTyID:
     return LLVMVectorTypeKind;
-  case Type::X86_MMXTyID:
-    return LLVMX86_MMXTypeKind;
   }
 }
 
@@ -252,9 +232,6 @@ LLVMTypeRef LLVMFP128TypeInContext(LLVMContextRef C) {
 LLVMTypeRef LLVMPPCFP128TypeInContext(LLVMContextRef C) {
   return (LLVMTypeRef) Type::getPPC_FP128Ty(*unwrap(C));
 }
-LLVMTypeRef LLVMX86MMXTypeInContext(LLVMContextRef C) {
-  return (LLVMTypeRef) Type::getX86_MMXTy(*unwrap(C));
-}
 
 LLVMTypeRef LLVMFloatType(void) {
   return LLVMFloatTypeInContext(LLVMGetGlobalContext());
@@ -270,9 +247,6 @@ LLVMTypeRef LLVMFP128Type(void) {
 }
 LLVMTypeRef LLVMPPCFP128Type(void) {
   return LLVMPPCFP128TypeInContext(LLVMGetGlobalContext());
-}
-LLVMTypeRef LLVMX86MMXType(void) {
-  return LLVMX86MMXTypeInContext(LLVMGetGlobalContext());
 }
 
 /*--.. Operations on function types ........................................--*/
@@ -553,14 +527,6 @@ LLVMValueRef LLVMConstInt(LLVMTypeRef IntTy, unsigned long long N,
   return wrap(ConstantInt::get(unwrap<IntegerType>(IntTy), N, SignExtend != 0));
 }
 
-LLVMValueRef LLVMConstIntOfArbitraryPrecision(LLVMTypeRef IntTy,
-                                              unsigned NumWords,
-                                              const uint64_t Words[]) {
-    IntegerType *Ty = unwrap<IntegerType>(IntTy);
-    return wrap(ConstantInt::get(Ty->getContext(),
-                                 APInt(Ty->getBitWidth(), NumWords, Words)));
-}
-
 LLVMValueRef LLVMConstIntOfString(LLVMTypeRef IntTy, const char Str[],
                                   uint8_t Radix) {
   return wrap(ConstantInt::get(unwrap<IntegerType>(IntTy), StringRef(Str),
@@ -601,7 +567,7 @@ LLVMValueRef LLVMConstStringInContext(LLVMContextRef C, const char *Str,
                                       LLVMBool DontNullTerminate) {
   /* Inverted the sense of AddNull because ', 0)' is a
      better mnemonic for null termination than ', 1)'. */
-  return wrap(ConstantArray::get(*unwrap(C), StringRef(Str, Length),
+  return wrap(ConstantArray::get(*unwrap(C), std::string(Str, Length),
                                  DontNullTerminate == 0));
 }
 LLVMValueRef LLVMConstStructInContext(LLVMContextRef C, 
@@ -2246,11 +2212,6 @@ void LLVMDisposeMemoryBuffer(LLVMMemoryBufferRef MemBuf) {
   delete unwrap(MemBuf);
 }
 
-/*===-- Pass Registry -----------------------------------------------------===*/
-
-LLVMPassRegistryRef LLVMGetGlobalPassRegistry(void) {
-  return wrap(PassRegistry::getPassRegistry());
-}
 
 /*===-- Pass Manager ------------------------------------------------------===*/
 

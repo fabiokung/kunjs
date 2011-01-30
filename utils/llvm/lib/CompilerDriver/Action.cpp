@@ -14,12 +14,11 @@
 #include "llvm/CompilerDriver/Action.h"
 #include "llvm/CompilerDriver/BuiltinOptions.h"
 #include "llvm/CompilerDriver/Error.h"
-#include "llvm/CompilerDriver/Main.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SystemUtils.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/TimeValue.h"
+#include "llvm/System/Program.h"
+#include "llvm/System/TimeValue.h"
 
 #include <stdexcept>
 #include <string>
@@ -29,6 +28,7 @@ using namespace llvmc;
 
 namespace llvmc {
 
+extern int Main(int argc, char** argv);
 extern const char* ProgramName;
 
 }
@@ -53,19 +53,15 @@ namespace {
 #endif
   }
 
-  int ExecuteProgram (const std::string& name, const StrVector& args) {
-    sys::Path prog(name);
+  int ExecuteProgram (const std::string& name,
+                      const StrVector& args) {
+    sys::Path prog = sys::Program::FindProgramByName(name);
 
-    if (!prog.isAbsolute()) {
-      prog = PrependMainExecutablePath(name, ProgramName,
-                                       (void *)(intptr_t)&Main);
-
-      if (!prog.canExecute()) {
-        prog = sys::Program::FindProgramByName(name);
-        if (prog.isEmpty()) {
-          PrintError("Can't find program '" + name + "'");
-          return -1;
-        }
+    if (prog.isEmpty()) {
+      prog = FindExecutable(name, ProgramName, (void *)(intptr_t)&Main);
+      if (prog.isEmpty()) {
+        PrintError("Can't find program '" + name + "'");
+        return -1;
       }
     }
     if (!prog.canExecute()) {

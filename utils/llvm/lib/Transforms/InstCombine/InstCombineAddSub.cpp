@@ -84,15 +84,13 @@ bool InstCombiner::WillNotOverflowSignedAdd(Value *LHS, Value *RHS) {
 }
 
 Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
-  bool Changed = SimplifyAssociativeOrCommutative(I);
+  bool Changed = SimplifyCommutative(I);
   Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
 
   if (Value *V = SimplifyAddInst(LHS, RHS, I.hasNoSignedWrap(),
                                  I.hasNoUnsignedWrap(), TD))
     return ReplaceInstUsesWith(I, V);
 
-  if (Instruction *NV = SimplifyByFactorizing(I)) // (A*B)+(A*C) -> A*(B+C)
-    return NV;
   
   if (Constant *RHSC = dyn_cast<Constant>(RHS)) {
     if (ConstantInt *CI = dyn_cast<ConstantInt>(RHSC)) {
@@ -344,7 +342,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
 }
 
 Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
-  bool Changed = SimplifyAssociativeOrCommutative(I);
+  bool Changed = SimplifyCommutative(I);
   Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
 
   if (Constant *RHSC = dyn_cast<Constant>(RHS)) {
@@ -550,9 +548,6 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
   if (Op0 == Op1)                        // sub X, X  -> 0
     return ReplaceInstUsesWith(I, Constant::getNullValue(I.getType()));
 
-  if (Instruction *NV = SimplifyByFactorizing(I)) // (A*B)-(A*C) -> A*(B-C)
-    return NV;
-  
   // If this is a 'B = x-(-A)', change to B = x+A.  This preserves NSW/NUW.
   if (Value *V = dyn_castNegVal(Op1)) {
     BinaryOperator *Res = BinaryOperator::CreateAdd(Op0, V);
@@ -679,15 +674,6 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
           ConstantExpr::getSub(ConstantInt::get(I.getType(), 1),
                                              C2);
         return BinaryOperator::CreateMul(Op0, CP1);
-      }
-
-      // X - A*-B -> X + A*B
-      // X - -A*B -> X + A*B
-      Value *A, *B;
-      if (match(Op1I, m_Mul(m_Value(A), m_Neg(m_Value(B)))) ||
-          match(Op1I, m_Mul(m_Neg(m_Value(A)), m_Value(B)))) {
-        Value *NewMul = Builder->CreateMul(A, B);
-        return BinaryOperator::CreateAdd(Op0, NewMul);
       }
     }
   }

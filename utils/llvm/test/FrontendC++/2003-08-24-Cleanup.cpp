@@ -1,4 +1,4 @@
-// RUN: %llvmgxx -xc++ %s -S -o - | grep unwind
+// RUN: %llvmgxx -xc++ %s -c -o - | llvm-dis | grep unwind
 
 struct S { ~S(); };
 

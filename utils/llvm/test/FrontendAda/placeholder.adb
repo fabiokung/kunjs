@@ -1,4 +1,4 @@
--- RUN: %llvmgcc -S %s
+-- RUN: %llvmgcc -c %s
 procedure Placeholder is
    subtype Bounded is Integer range 1 .. 5;
    type Vector is array (Bounded range <>) of Integer;

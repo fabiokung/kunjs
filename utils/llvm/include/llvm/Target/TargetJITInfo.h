@@ -19,7 +19,7 @@
 
 #include <cassert>
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/System/DataTypes.h"
 
 namespace llvm {
   class Function;

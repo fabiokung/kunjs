@@ -1,4 +1,4 @@
--- RUN: %llvmgcc -S %s
+-- RUN: %llvmgcc -c %s
 procedure Array_Ref is
    type A is array (Natural range <>, Natural range <>) of Boolean;
    type A_Access is access A;

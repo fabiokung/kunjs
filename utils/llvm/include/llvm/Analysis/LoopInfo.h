@@ -32,7 +32,6 @@
 #define LLVM_ANALYSIS_LOOP_INFO_H
 
 #include "llvm/Pass.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/SmallVector.h"
@@ -524,9 +523,10 @@ public:
   ///
   bool isLoopInvariant(Value *V) const;
 
-  /// hasLoopInvariantOperands - Return true if all the operands of the
-  /// specified instruction are loop invariant. 
-  bool hasLoopInvariantOperands(Instruction *I) const;
+  /// isLoopInvariant - Return true if the specified instruction is
+  /// loop-invariant.
+  ///
+  bool isLoopInvariant(Instruction *I) const;
 
   /// makeLoopInvariant - If the given value is an instruction inside of the
   /// loop and it can be hoisted, do so to make it trivially loop-invariant.
@@ -630,7 +630,7 @@ private:
 template<class BlockT, class LoopT>
 class LoopInfoBase {
   // BBMap - Mapping of basic blocks to the inner most loop they occur in
-  DenseMap<BlockT *, LoopT *> BBMap;
+  std::map<BlockT *, LoopT *> BBMap;
   std::vector<LoopT *> TopLevelLoops;
   friend class LoopBase<BlockT, LoopT>;
 
@@ -661,7 +661,7 @@ public:
   /// block is in no loop (for example the entry node), null is returned.
   ///
   LoopT *getLoopFor(const BlockT *BB) const {
-    typename DenseMap<BlockT *, LoopT *>::const_iterator I=
+    typename std::map<BlockT *, LoopT *>::const_iterator I=
       BBMap.find(const_cast<BlockT*>(BB));
     return I != BBMap.end() ? I->second : 0;
   }
@@ -729,7 +729,7 @@ public:
   /// including all of the Loop objects it is nested in and our mapping from
   /// BasicBlocks to loops.
   void removeBlock(BlockT *BB) {
-    typename DenseMap<BlockT *, LoopT *>::iterator I = BBMap.find(BB);
+    typename std::map<BlockT *, LoopT *>::iterator I = BBMap.find(BB);
     if (I != BBMap.end()) {
       for (LoopT *L = I->second; L; L = L->getParentLoop())
         L->removeBlockFromLoop(BB);
@@ -923,7 +923,7 @@ public:
     for (unsigned i = 0; i < TopLevelLoops.size(); ++i)
       TopLevelLoops[i]->print(OS);
   #if 0
-    for (DenseMap<BasicBlock*, LoopT*>::const_iterator I = BBMap.begin(),
+    for (std::map<BasicBlock*, LoopT*>::const_iterator I = BBMap.begin(),
            E = BBMap.end(); I != E; ++I)
       OS << "BB '" << I->first->getName() << "' level = "
          << I->second->getLoopDepth() << "\n";
@@ -940,9 +940,7 @@ class LoopInfo : public FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  LoopInfo() : FunctionPass(ID) {
-    initializeLoopInfoPass(*PassRegistry::getPassRegistry());
-  }
+  LoopInfo() : FunctionPass(ID) {}
 
   LoopInfoBase<BasicBlock, Loop>& getBase() { return LI; }
 
@@ -1020,23 +1018,6 @@ public:
   /// BasicBlocks to loops.
   void removeBlock(BasicBlock *BB) {
     LI.removeBlock(BB);
-  }
-
-  /// replacementPreservesLCSSAForm - Returns true if replacing From with To
-  /// everywhere is guaranteed to preserve LCSSA form.
-  bool replacementPreservesLCSSAForm(Instruction *From, Value *To) {
-    // Preserving LCSSA form is only problematic if the replacing value is an
-    // instruction.
-    Instruction *I = dyn_cast<Instruction>(To);
-    if (!I) return true;
-    // If the instruction is not defined in a loop then it can safely replace
-    // anything.
-    Loop *ToLoop = getLoopFor(I->getParent());
-    if (!ToLoop) return true;
-    // If the replacing instruction is defined in the same loop as the original
-    // instruction, or in a loop that contains it as an inner loop, then using
-    // it as a replacement will not break LCSSA form.
-    return ToLoop->contains(getLoopFor(From->getParent()));
   }
 };
 

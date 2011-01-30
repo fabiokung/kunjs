@@ -45,7 +45,7 @@ class Triple {
 public:
   enum ArchType {
     UnknownArch,
-
+    
     alpha,   // Alpha: alpha
     arm,     // ARM; arm, armv.*, xscale
     bfin,    // Blackfin: bfin
@@ -53,6 +53,7 @@ public:
     mips,    // MIPS: mips, mipsallegrex
     mipsel,  // MIPSEL: mipsel, mipsallegrexel, psp
     msp430,  // MSP430: msp430
+    pic16,   // PIC16: pic16
     ppc,     // PPC: powerpc
     ppc64,   // PPC64: powerpc64, ppu
     sparc,   // Sparc: sparc
@@ -64,14 +65,13 @@ public:
     x86_64,  // X86-64: amd64, x86_64
     xcore,   // XCore: xcore
     mblaze,  // MBlaze: mblaze
-    ptx,     // PTX: ptx
 
     InvalidArch
   };
   enum VendorType {
     UnknownVendor,
 
-    Apple,
+    Apple, 
     PC
   };
   enum OSType {
@@ -94,10 +94,7 @@ public:
     Haiku,
     Minix
   };
-  enum EnvironmentType {
-    UnknownEnvironment
-  };
-
+  
 private:
   std::string Data;
 
@@ -110,20 +107,16 @@ private:
   /// The parsed OS type.
   mutable OSType OS;
 
-  /// The parsed Environment type.
-  mutable EnvironmentType Environment;
-
   bool isInitialized() const { return Arch != InvalidArch; }
   static ArchType ParseArch(StringRef ArchName);
   static VendorType ParseVendor(StringRef VendorName);
   static OSType ParseOS(StringRef OSName);
-  static EnvironmentType ParseEnvironment(StringRef EnvironmentName);
   void Parse() const;
 
 public:
   /// @name Constructors
   /// @{
-
+  
   Triple() : Data(), Arch(InvalidArch) {}
   explicit Triple(StringRef Str) : Data(Str), Arch(InvalidArch) {}
   explicit Triple(StringRef ArchStr, StringRef VendorStr, StringRef OSStr)
@@ -132,17 +125,6 @@ public:
     Data += VendorStr;
     Data += '-';
     Data += OSStr;
-  }
-
-  explicit Triple(StringRef ArchStr, StringRef VendorStr, StringRef OSStr,
-    StringRef EnvironmentStr)
-    : Data(ArchStr), Arch(InvalidArch) {
-    Data += '-';
-    Data += VendorStr;
-    Data += '-';
-    Data += OSStr;
-    Data += '-';
-    Data += EnvironmentStr;
   }
 
   /// @}
@@ -158,22 +140,22 @@ public:
   /// @}
   /// @name Typed Component Access
   /// @{
-
+  
   /// getArch - Get the parsed architecture type of this triple.
-  ArchType getArch() const {
-    if (!isInitialized()) Parse();
+  ArchType getArch() const { 
+    if (!isInitialized()) Parse(); 
     return Arch;
   }
-
+  
   /// getVendor - Get the parsed vendor type of this triple.
-  VendorType getVendor() const {
-    if (!isInitialized()) Parse();
+  VendorType getVendor() const { 
+    if (!isInitialized()) Parse(); 
     return Vendor;
   }
-
+  
   /// getOS - Get the parsed operating system type of this triple.
-  OSType getOS() const {
-    if (!isInitialized()) Parse();
+  OSType getOS() const { 
+    if (!isInitialized()) Parse(); 
     return OS;
   }
 
@@ -181,12 +163,6 @@ public:
   /// (fourth) component?
   bool hasEnvironment() const {
     return getEnvironmentName() != "";
-  }
-
-  /// getEnvironment - Get the parsed environment type of this triple.
-  EnvironmentType getEnvironment() const {
-    if (!isInitialized()) Parse();
-    return Environment;
   }
 
   /// @}
@@ -217,13 +193,13 @@ public:
   /// if the environment component is present).
   StringRef getOSAndEnvironmentName() const;
 
-
+  
   /// getDarwinNumber - Parse the 'darwin number' out of the specific target
   /// triple.  For example, if we have darwin8.5 return 8,5,0.  If any entry is
   /// not defined, return 0's.  This requires that the triple have an OSType of
   /// darwin before it is called.
   void getDarwinNumber(unsigned &Maj, unsigned &Min, unsigned &Revision) const;
-
+  
   /// getDarwinMajorNumber - Return just the major version number, this is
   /// specialized because it is a common query.
   unsigned getDarwinMajorNumber() const {
@@ -231,7 +207,7 @@ public:
     getDarwinNumber(Maj, Min, Rev);
     return Maj;
   }
-
+  
   /// @}
   /// @name Mutators
   /// @{
@@ -247,10 +223,6 @@ public:
   /// setOS - Set the operating system (third) component of the triple
   /// to a known type.
   void setOS(OSType Kind);
-
-  /// setEnvironment - Set the environment (fourth) component of the triple
-  /// to a known type.
-  void setEnvironment(EnvironmentType Kind);
 
   /// setTriple - Set all components to the new triple \arg Str.
   void setTriple(const Twine &Str);
@@ -299,13 +271,8 @@ public:
   /// vendor.
   static const char *getVendorTypeName(VendorType Kind);
 
-  /// getOSTypeName - Get the canonical name for the \arg Kind operating
-  /// system.
+  /// getOSTypeName - Get the canonical name for the \arg Kind vendor.
   static const char *getOSTypeName(OSType Kind);
-
-  /// getEnvironmentTypeName - Get the canonical name for the \arg Kind
-  /// environment.
-  static const char *getEnvironmentTypeName(EnvironmentType Kind);
 
   /// @}
   /// @name Static helpers for converting alternate architecture names.

@@ -51,7 +51,8 @@ namespace {
 
   private:
     SDNode *Select(SDNode *N);
-    bool SelectADDRspii(SDValue Addr, SDValue &Base, SDValue &Offset);
+    bool SelectADDRspii(SDNode *Op, SDValue Addr,
+                        SDValue &Base, SDValue &Offset);
 
     // Walk the DAG after instruction selection, fixing register class issues.
     void FixRegisterClasses(SelectionDAG &DAG);
@@ -93,7 +94,8 @@ SDNode *BlackfinDAGToDAGISel::Select(SDNode *N) {
   return SelectCode(N);
 }
 
-bool BlackfinDAGToDAGISel::SelectADDRspii(SDValue Addr,
+bool BlackfinDAGToDAGISel::SelectADDRspii(SDNode *Op,
+                                          SDValue Addr,
                                           SDValue &Base,
                                           SDValue &Offset) {
   FrameIndexSDNode *FIN = 0;

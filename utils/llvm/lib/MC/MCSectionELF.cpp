@@ -29,6 +29,14 @@ bool MCSectionELF::ShouldOmitSectionDirective(StringRef Name,
   return false;
 }
 
+// ShouldPrintSectionType - Only prints the section type if supported
+bool MCSectionELF::ShouldPrintSectionType(unsigned Ty) const {
+  if (IsExplicit && !(Ty == SHT_NOBITS || Ty == SHT_PROGBITS))
+    return false;
+
+  return true;
+}
+
 void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI,
                                         raw_ostream &OS) const {
    
@@ -76,39 +84,41 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI,
   
   OS << '"';
 
-  OS << ',';
-
-  // If comment string is '@', e.g. as on ARM - use '%' instead
-  if (MAI.getCommentString()[0] == '@')
-    OS << '%';
-  else
-    OS << '@';
-
-  if (Type == MCSectionELF::SHT_INIT_ARRAY)
-    OS << "init_array";
-  else if (Type == MCSectionELF::SHT_FINI_ARRAY)
-    OS << "fini_array";
-  else if (Type == MCSectionELF::SHT_PREINIT_ARRAY)
-    OS << "preinit_array";
-  else if (Type == MCSectionELF::SHT_NOBITS)
-    OS << "nobits";
-  else if (Type == MCSectionELF::SHT_PROGBITS)
-    OS << "progbits";
-
-  if (EntrySize) {
-    assert(Flags & MCSectionELF::SHF_MERGE);
-    OS << "," << EntrySize;
+  if (ShouldPrintSectionType(Type)) {
+    OS << ',';
+ 
+    // If comment string is '@', e.g. as on ARM - use '%' instead
+    if (MAI.getCommentString()[0] == '@')
+      OS << '%';
+    else
+      OS << '@';
+  
+    if (Type == MCSectionELF::SHT_INIT_ARRAY)
+      OS << "init_array";
+    else if (Type == MCSectionELF::SHT_FINI_ARRAY)
+      OS << "fini_array";
+    else if (Type == MCSectionELF::SHT_PREINIT_ARRAY)
+      OS << "preinit_array";
+    else if (Type == MCSectionELF::SHT_NOBITS)
+      OS << "nobits";
+    else if (Type == MCSectionELF::SHT_PROGBITS)
+      OS << "progbits";
+  
+    if (getKind().isMergeable1ByteCString()) {
+      OS << ",1";
+    } else if (getKind().isMergeable2ByteCString()) {
+      OS << ",2";
+    } else if (getKind().isMergeable4ByteCString() || 
+               getKind().isMergeableConst4()) {
+      OS << ",4";
+    } else if (getKind().isMergeableConst8()) {
+      OS << ",8";
+    } else if (getKind().isMergeableConst16()) {
+      OS << ",16";
+    }
   }
-
+  
   OS << '\n';
-}
-
-bool MCSectionELF::UseCodeAlign() const {
-  return getFlags() & MCSectionELF::SHF_EXECINSTR;
-}
-
-bool MCSectionELF::isVirtualSection() const {
-  return getType() == MCSectionELF::SHT_NOBITS;
 }
 
 // HasCommonSymbols - True if this section holds common symbols, this is
@@ -122,12 +132,4 @@ bool MCSectionELF::HasCommonSymbols() const {
   return false;
 }
 
-unsigned MCSectionELF::DetermineEntrySize(SectionKind Kind) {
-  if (Kind.isMergeable1ByteCString()) return 1;
-  if (Kind.isMergeable2ByteCString()) return 2;
-  if (Kind.isMergeable4ByteCString()) return 4;
-  if (Kind.isMergeableConst4())       return 4;
-  if (Kind.isMergeableConst8())       return 8;
-  if (Kind.isMergeableConst16())      return 16;
-  return 0;
-}
+

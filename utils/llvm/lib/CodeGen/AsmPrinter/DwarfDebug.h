@@ -23,7 +23,6 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/UniqueVector.h"
 #include "llvm/Support/Allocator.h"
-#include "llvm/Support/DebugLoc.h"
 
 namespace llvm {
 
@@ -94,9 +93,30 @@ class DwarfDebug {
   ///
   std::vector<DIEAbbrev *> Abbreviations;
 
+  /// DirectoryIdMap - Directory name to directory id map.
+  ///
+  StringMap<unsigned> DirectoryIdMap;
+
+  /// DirectoryNames - A list of directory names.
+  SmallVector<std::string, 8> DirectoryNames;
+
+  /// SourceFileIdMap - Source file name to source file id map.
+  ///
+  StringMap<unsigned> SourceFileIdMap;
+
+  /// SourceFileNames - A list of source file names.
+  SmallVector<std::string, 8> SourceFileNames;
+
   /// SourceIdMap - Source id map, i.e. pair of directory id and source file
   /// id mapped to a unique id.
-  StringMap<unsigned> SourceIdMap;
+  DenseMap<std::pair<unsigned, unsigned>, unsigned> SourceIdMap;
+
+  /// SourceIds - Reverse map from source id to directory id + file id pair.
+  ///
+  SmallVector<std::pair<unsigned, unsigned>, 8> SourceIds;
+
+  /// Lines - List of source line correspondence.
+  std::vector<SrcLineInfo> Lines;
 
   /// DIEBlocks - A list of all the DIEBlocks in use.
   std::vector<DIEBlock *> DIEBlocks;
@@ -114,6 +134,10 @@ class DwarfDebug {
   /// SectionMap - Provides a unique id per text section.
   ///
   UniqueVector<const MCSection*> SectionMap;
+
+  /// SectionSourceLines - Tracks line numbers per text section.
+  ///
+  std::vector<std::vector<SrcLineInfo> > SectionSourceLines;
 
   // CurrentFnDbgScope - Top level scope for the current function.
   //
@@ -150,6 +174,9 @@ class DwarfDebug {
   /// DbgVariableToDbgInstMap - Maps DbgVariable to corresponding DBG_VALUE
   /// machine instruction.
   DenseMap<const DbgVariable *, const MachineInstr *> DbgVariableToDbgInstMap;
+
+  /// DbgVariableLabelsMap - Maps DbgVariable to corresponding MCSymbol.
+  DenseMap<const DbgVariable *, const MCSymbol *> DbgVariableLabelsMap;
 
   /// DotDebugLocEntry - This struct describes location entries emitted in
   /// .debug_loc section.
@@ -238,10 +265,35 @@ class DwarfDebug {
 
   DIEInteger *DIEIntegerOne;
 private:
+  
+  /// getSourceDirectoryAndFileIds - Return the directory and file ids that
+  /// maps to the source id. Source id starts at 1.
+  std::pair<unsigned, unsigned>
+  getSourceDirectoryAndFileIds(unsigned SId) const {
+    return SourceIds[SId-1];
+  }
+
+  /// getNumSourceDirectories - Return the number of source directories in the
+  /// debug info.
+  unsigned getNumSourceDirectories() const {
+    return DirectoryNames.size();
+  }
+
+  /// getSourceDirectoryName - Return the name of the directory corresponding
+  /// to the id.
+  const std::string &getSourceDirectoryName(unsigned Id) const {
+    return DirectoryNames[Id - 1];
+  }
+
+  /// getSourceFileName - Return the name of the source file corresponding
+  /// to the id.
+  const std::string &getSourceFileName(unsigned Id) const {
+    return SourceFileNames[Id - 1];
+  }
 
   /// getNumSourceIds - Return the number of unique source ids.
   unsigned getNumSourceIds() const {
-    return SourceIdMap.size();
+    return SourceIds.size();
   }
 
   /// assignAbbrevNumber - Define a unique number for the abbreviation.
@@ -297,13 +349,13 @@ private:
                   const MachineLocation &Location);
 
   /// addRegisterAddress - Add register location entry in variable DIE.
-  bool addRegisterAddress(DIE *Die, const MachineOperand &MO);
+  bool addRegisterAddress(DIE *Die, const MCSymbol *VS, const MachineOperand &MO);
 
   /// addConstantValue - Add constant value entry in variable DIE.
-  bool addConstantValue(DIE *Die, const MachineOperand &MO);
+  bool addConstantValue(DIE *Die, const MCSymbol *VS, const MachineOperand &MO);
 
   /// addConstantFPValue - Add constant value entry in variable DIE.
-  bool addConstantFPValue(DIE *Die, const MachineOperand &MO);
+  bool addConstantFPValue(DIE *Die, const MCSymbol *VS, const MachineOperand &MO);
 
   /// addComplexAddress - Start with the address based on the location provided,
   /// and generate the DWARF information necessary to find the actual variable
@@ -369,7 +421,7 @@ private:
   DIE *createMemberDIE(DIDerivedType DT);
 
   /// createSubprogramDIE - Create new DIE using SP.
-  DIE *createSubprogramDIE(DISubprogram SP);
+  DIE *createSubprogramDIE(DISubprogram SP, bool MakeDecl = false);
 
   /// getOrCreateDbgScope - Create DbgScope for the scope.
   DbgScope *getOrCreateDbgScope(const MDNode *Scope, const MDNode *InlinedAt);
@@ -429,6 +481,10 @@ private:
   ///
   void emitEndOfLineMatrix(unsigned SectionEnd);
 
+  /// emitDebugLines - Emit source line information.
+  ///
+  void emitDebugLines();
+
   /// emitCommonDebugFrame - Emit common frame info into a debug frame section.
   ///
   void emitCommonDebugFrame();
@@ -487,8 +543,9 @@ private:
 
   /// GetOrCreateSourceID - Look up the source id with the given directory and
   /// source file names. If none currently exists, create a new id and insert it
-  /// in the SourceIds map.
-  unsigned GetOrCreateSourceID(StringRef FullName);
+  /// in the SourceIds map. This can update DirectoryNames and SourceFileNames
+  /// maps as well.
+  unsigned GetOrCreateSourceID(StringRef DirName, StringRef FileName);
 
   /// constructCompileUnit - Create new CompileUnit for the given 
   /// metadata node with tag DW_TAG_compile_unit.
@@ -508,12 +565,21 @@ private:
   /// the source line list.
   MCSymbol *recordSourceLine(unsigned Line, unsigned Col, const MDNode *Scope);
   
+  /// getSourceLineCount - Return the number of source lines in the debug
+  /// info.
+  unsigned getSourceLineCount() const {
+    return Lines.size();
+  }
+  
   /// recordVariableFrameIndex - Record a variable's index.
   void recordVariableFrameIndex(const DbgVariable *V, int Index);
 
   /// findVariableFrameIndex - Return true if frame index for the variable
   /// is found. Update FI to hold value of the index.
   bool findVariableFrameIndex(const DbgVariable *V, int *FI);
+
+  /// findVariableLabel - Find MCSymbol for the variable.
+  const MCSymbol *findVariableLabel(const DbgVariable *V);
 
   /// findDbgScope - Find DbgScope for the debug loc attached with an 
   /// instruction.
@@ -564,11 +630,11 @@ public:
   /// getLabelAfterInsn - Return Label immediately following the instruction.
   const MCSymbol *getLabelAfterInsn(const MachineInstr *MI);
 
-  /// beginInstruction - Process beginning of an instruction.
-  void beginInstruction(const MachineInstr *MI);
+  /// beginScope - Process beginning of a scope.
+  void beginScope(const MachineInstr *MI);
 
-  /// endInstruction - Prcess end of an instruction.
-  void endInstruction(const MachineInstr *MI);
+  /// endScope - Prcess end of a scope.
+  void endScope(const MachineInstr *MI);
 };
 } // End of namespace llvm
 

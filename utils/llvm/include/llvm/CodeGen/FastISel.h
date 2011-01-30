@@ -15,6 +15,9 @@
 #define LLVM_CODEGEN_FASTISEL_H
 
 #include "llvm/ADT/DenseMap.h"
+#ifndef NDEBUG
+#include "llvm/ADT/SmallSet.h"
+#endif
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 
@@ -36,7 +39,6 @@ class TargetLowering;
 class TargetMachine;
 class TargetRegisterClass;
 class TargetRegisterInfo;
-class LoadInst;
 
 /// FastISel - This is a fast-path instruction selection class that
 /// generates poor code and doesn't support illegal types or non-trivial
@@ -100,16 +102,7 @@ public:
   /// index value.
   std::pair<unsigned, bool> getRegForGEPIndex(const Value *V);
 
-  /// TryToFoldLoad - The specified machine instr operand is a vreg, and that
-  /// vreg is being provided by the specified load instruction.  If possible,
-  /// try to fold the load as an operand to the instruction, returning true if
-  /// possible.
-  virtual bool TryToFoldLoad(MachineInstr * /*MI*/, unsigned /*OpNo*/,
-                             const LoadInst * /*LI*/) {
-    return false;
-  }
-  
-  /// recomputeInsertPt - Reset InsertPt to prepare for inserting instructions
+  /// recomputeInsertPt - Reset InsertPt to prepare for insterting instructions
   /// into the current block.
   void recomputeInsertPt();
 
