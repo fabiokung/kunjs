@@ -29,17 +29,17 @@ void ASTPrinter::operator()(std::vector<ast::Statement> const& list) const {
 
 void ASTPrinter::operator()(ast::Program const& program) const {
   std::cout << indent(indentation) << "(Program " << std::endl;
-  indentation += 2;
+  indentation += INDENT_STEP;
   std::for_each(program.begin(), program.end(), *this);
-  indentation -= 2;
+  indentation -= INDENT_STEP;
   std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void ASTPrinter::operator()(ast::SourceElement const& element) const {
   std::cout << indent(indentation) << "(SourceElement " << std::endl;
-  indentation += 2;
+  indentation += INDENT_STEP;
   boost::apply_visitor(*this, element);
-  indentation -= 2;
+  indentation -= INDENT_STEP;
   std::cout << indent(indentation) << ")" << std::endl;
 }
 
@@ -49,7 +49,7 @@ void ASTPrinter::operator()(ast::FunctionDeclaration const& function) const {
 
 void ASTPrinter::operator()(ast::Statement const& statement) const {
   std::cout << indent(indentation) << "(Statement " << std::endl;
-  StatementPrinter printer(indentation + 2);
+  StatementPrinter printer(indentation + INDENT_STEP);
   boost::apply_visitor(printer, statement);
   std::cout << indent(indentation) << ")" << std::endl;
 }
@@ -59,7 +59,7 @@ StatementPrinter::StatementPrinter(int indent) : indentation(indent) {}
 
 void StatementPrinter::operator()(ast::Expression const& expression) {
   std::cout << indent(indentation) << "(Expression " << std::endl;
-  ExpressionPrinter printer(indentation + 2);
+  ExpressionPrinter printer(indentation + INDENT_STEP);
   std::for_each(expression.begin(), expression.end(), printer);
   std::cout << indent(indentation) << ")" << std::endl;
 }
@@ -71,7 +71,7 @@ void StatementPrinter::operator()(ast::Var const& var) {
 }
 
 void StatementPrinter::operator()(ast::VarDeclaration const& declaration) {
-  int next_level = indentation + 2;
+  int next_level = indentation + INDENT_STEP;
   ExpressionPrinter print_expression(next_level);
   std::cout << indent(indentation) << "(Var" << std::endl;
 
@@ -86,9 +86,9 @@ void StatementPrinter::operator()(ast::Noop const& noop) {
 }
 
 void StatementPrinter::operator()(ast::If const& conditional) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(If " << std::endl;
 
@@ -110,9 +110,9 @@ void StatementPrinter::operator()(ast::If const& conditional) {
 }
 
 void StatementPrinter::operator()(ast::DoWhile const& loop) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(DoWhile " << std::endl;
 
@@ -128,9 +128,9 @@ void StatementPrinter::operator()(ast::DoWhile const& loop) {
 }
 
 void StatementPrinter::operator()(ast::While const& loop) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(While " << std::endl;
 
@@ -146,9 +146,9 @@ void StatementPrinter::operator()(ast::While const& loop) {
 }
 
 void StatementPrinter::operator()(ast::For const& loop) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(For " << std::endl;
 
@@ -178,9 +178,9 @@ void StatementPrinter::operator()(ast::For const& loop) {
 }
 
 void StatementPrinter::operator()(ast::ForWithVar const& loop) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(ForWithVar " << std::endl;
 
@@ -210,10 +210,10 @@ void StatementPrinter::operator()(ast::ForWithVar const& loop) {
 }
 
 void StatementPrinter::operator()(ast::Foreach const& loop) {
-  int next = indentation + 2;
-  ExpressionPrinter print_lhs_expression(next + 2);
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print_lhs_expression(next + INDENT_STEP);
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(Foreach " << std::endl;
 
@@ -233,9 +233,9 @@ void StatementPrinter::operator()(ast::Foreach const& loop) {
 }
 
 void StatementPrinter::operator()(ast::ForeachWithVar const& loop) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(ForeachWithVar " << std::endl;
 
@@ -276,7 +276,7 @@ void StatementPrinter::operator()(ast::Return const& node) {
   std::cout << indent(indentation) << "(Return";
   if (node.expression) {
     std::cout << std::endl;
-    StatementPrinter print_expression(indentation + 2);
+    StatementPrinter print_expression(indentation + INDENT_STEP);
     print_expression(node.expression.get());
     std::cout << indent(indentation) << ")" << std::endl;
   } else {
@@ -285,9 +285,9 @@ void StatementPrinter::operator()(ast::Return const& node) {
 }
 
 void StatementPrinter::operator()(ast::With const& with) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(With" << std::endl;
 
@@ -303,7 +303,7 @@ void StatementPrinter::operator()(ast::With const& with) {
 }
 
 void StatementPrinter::operator()(ast::LabelledStatement const& labelled) {
-  int next = indentation + 2;
+  int next = indentation + INDENT_STEP;
   ASTPrinter print_statement(next);
 
   std::cout << indent(indentation) << "(LabelledStatement" << std::endl;
@@ -313,8 +313,8 @@ void StatementPrinter::operator()(ast::LabelledStatement const& labelled) {
 }
 
 void StatementPrinter::operator()(ast::Case const& clause) {
-  int next = indentation + 2;
-  StatementPrinter print_expression(next + 2);
+  int next = indentation + INDENT_STEP;
+  StatementPrinter print_expression(next + INDENT_STEP);
   ASTPrinter print_statement(next);
 
   std::cout << indent(indentation) << "(Case" << std::endl;
@@ -329,10 +329,10 @@ void StatementPrinter::operator()(ast::Case const& clause) {
 }
 
 void StatementPrinter::operator()(ast::Switch const& conditional) {
-  int next = indentation + 2;
+  int next = indentation + INDENT_STEP;
   StatementPrinter print_case(next);
-  StatementPrinter print_expression(next + 2);
-  ASTPrinter print_statement(next + 2);
+  StatementPrinter print_expression(next + INDENT_STEP);
+  ASTPrinter print_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(Switch" << std::endl;
 
@@ -360,16 +360,16 @@ void StatementPrinter::operator()(ast::Switch const& conditional) {
 }
 
 void StatementPrinter::operator()(ast::Throw const& node) {
-  StatementPrinter print_expression(indentation + 2);
+  StatementPrinter print_expression(indentation + INDENT_STEP);
   std::cout << indent(indentation) << "(Throw" << std::endl;
   print_expression(node.expression);
   std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void StatementPrinter::operator()(ast::Try const& node) {
-  int next = indentation + 2;
+  int next = indentation + INDENT_STEP;
   ASTPrinter print_statement(next);
-  ASTPrinter print_nested_statement(next + 2);
+  ASTPrinter print_nested_statement(next + INDENT_STEP);
 
   std::cout << indent(indentation) << "(Try" << std::endl;
   print_statement(node.statements);
@@ -377,7 +377,7 @@ void StatementPrinter::operator()(ast::Try const& node) {
   if (node.catch_block) {
     ast::Catch block = node.catch_block.get();
     std::cout << indent(next) << "(Catch" << std::endl;
-    std::cout << indent(next + 2) << "(exception_name " << block.exception_name << ")" << std::endl;
+    std::cout << indent(next + INDENT_STEP) << "(exception_name " << block.exception_name << ")" << std::endl;
     print_nested_statement(block.statements);
     std::cout << indent(next) << ")" << std::endl;
   }
@@ -404,7 +404,49 @@ void StatementPrinter::operator()(std::vector<ast::Statement> const& list) {
 ExpressionPrinter::ExpressionPrinter(int indent) : indentation(indent) {}
 
 void ExpressionPrinter::operator()(ast::AssignmentExpression const& expression) {
-  std::cout << indent(indentation) << "(AssignmentExpression)" << std::endl;
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print_lhs(next + INDENT_STEP);
+  ExpressionPrinter print_conditional(next);
+
+  std::cout << indent(indentation) << "(AssignmentExpression" << std::endl;
+
+  for (std::vector<ast::AssignmentOperation>::const_iterator it = expression.assignments.begin();
+       it != expression.assignments.end(); ++it) {
+    std::cout << indent(next) << "(AssignmentOperation" << std::endl;
+    print_lhs(it->lhs);
+    std::cout << indent(next + INDENT_STEP) << "(operator " << it->operator_ << ")" << std::endl;
+    std::cout << indent(next) << ")" << std::endl;
+  }
+
+  print_conditional(expression.rhs);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::ConditionalExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print_logical_or(next);
+  ExpressionPrinter print_assignment(next + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(ConditionalExpression" << std::endl;
+  print_logical_or(expression.lhs);
+
+  if (expression.conditional_clauses) {
+    ast::ConditionalClauses ternary = expression.conditional_clauses.get();
+
+    std::cout << indent(next) << "(true_clause" << std::endl;
+    print_assignment(ternary.true_clause.get());
+    std::cout << indent(next) << ")" << std::endl;
+
+    std::cout << indent(next) << "(false_clause" << std::endl;
+    print_assignment(ternary.false_clause.get());
+    std::cout << indent(next) << ")" << std::endl;
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::LogicalOrExpression const& expression) {
+  std::cout << indent(indentation) << "(LogicalOrExpression)" << std::endl;
 }
 
 void ExpressionPrinter::operator()(ast::LhsExpression const& expression) {

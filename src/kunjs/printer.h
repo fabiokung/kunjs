@@ -11,6 +11,8 @@
 
 namespace kunjs {
 
+static const int INDENT_STEP = 2;
+
 class ASTPrinter : public boost::static_visitor<> {
 
  public:
@@ -61,6 +63,8 @@ class ExpressionPrinter : public boost::static_visitor<> {
  public:
   ExpressionPrinter(int indent);
   void operator()(ast::AssignmentExpression const& expression);
+  void operator()(ast::ConditionalExpression const& expression);
+  void operator()(ast::LogicalOrExpression const& expression);
   void operator()(ast::LhsExpression const& expression);
 
 

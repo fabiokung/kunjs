@@ -93,6 +93,12 @@ TEST(Parser, MultipleAssignment) {
   ASSERT_TRUE(result);
 }
 
+TEST(Parser, Ternary) {
+  kunjs::Parser parser;
+  bool result = parser.parse("var n = i == 10 ? 'yep' : 'no';");
+  ASSERT_TRUE(result);
+}
+
 TEST(Parser, DoWhile) {
   kunjs::Parser parser;
   std::string code =
