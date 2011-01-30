@@ -11,6 +11,6 @@ TEST(Compiler, SimpleArithmetic) {
   llvm::Value* result = compiler.compile("1+2;");
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, 4, false) == r->getValue());
+  ASSERT_TRUE(llvm::APInt(64, 3, false) == r->getValue());
 }
 
