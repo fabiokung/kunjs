@@ -446,13 +446,272 @@ void ExpressionPrinter::operator()(ast::ConditionalExpression const& expression)
 }
 
 void ExpressionPrinter::operator()(ast::LogicalOrExpression const& expression) {
-  std::cout << indent(indentation) << "(LogicalOrExpression)" << std::endl;
+  ExpressionPrinter print_logical_and(indentation + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(LogicalOrExpression" << std::endl;
+  print_logical_and(expression.lhs);
+  std::for_each(expression.operations.begin(), expression.operations.end(), print_logical_and);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::LogicalAndExpression const& expression) {
+  ExpressionPrinter print(indentation + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(LogicalAndExpression" << std::endl;
+  print(expression.lhs);
+  std::for_each(expression.operations.begin(), expression.operations.end(), print);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::BitwiseOrExpression const& expression) {
+  ExpressionPrinter print(indentation + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(BitwiseOrExpression" << std::endl;
+  print(expression.lhs);
+  std::for_each(expression.operations.begin(), expression.operations.end(), print);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::BitwiseXorExpression const& expression) {
+  ExpressionPrinter print(indentation + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(BitwiseXorExpression" << std::endl;
+  print(expression.lhs);
+  std::for_each(expression.operations.begin(), expression.operations.end(), print);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::BitwiseAndExpression const& expression) {
+  ExpressionPrinter print(indentation + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(BitwiseAndExpression" << std::endl;
+  print(expression.lhs);
+  std::for_each(expression.operations.begin(), expression.operations.end(), print);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::EqualityExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(EqualityExpression" << std::endl;
+  print(expression.lhs);
+
+  for (std::vector<ast::EqualityOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    std::cout << indent(next) << "(operator " << it->operator_ << ")" << std::endl;
+    print(it->rhs);
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::RelationalExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(RelationalExpression" << std::endl;
+  print(expression.lhs);
+
+  for (std::vector<ast::RelationalOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    std::cout << indent(next) << "(operator " << it->operator_ << ")" << std::endl;
+    print(it->rhs);
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::ShiftExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(ShiftExpression" << std::endl;
+  print(expression.lhs);
+
+  for (std::vector<ast::ShiftOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    std::cout << indent(next) << "(operator " << it->operator_ << ")" << std::endl;
+    print(it->rhs);
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::AdditiveExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(AdditiveExpression" << std::endl;
+  print(expression.lhs);
+
+  for (std::vector<ast::AdditiveOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    std::cout << indent(next) << "(operator " << it->operator_ << ")" << std::endl;
+    print(it->rhs);
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::MultiplicativeExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(MultiplicativeExpression" << std::endl;
+  print(expression.lhs);
+
+  for (std::vector<ast::MultiplicativeOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    std::cout << indent(next) << "(operator " << it->operator_ << ")" << std::endl;
+    print(it->rhs);
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::UnaryExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(UnaryExpression" << std::endl;
+  for (std::vector<std::string>::const_iterator it = expression.operators.begin();
+       it != expression.operators.end(); ++it) {
+    std::cout << indent(next) << "(operator " << *it << ")" << std::endl;
+  }
+
+  print(expression.rhs);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::PostfixExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(PostfixExpression" << std::endl;
+  print(expression.lhs);
+
+  if (expression.operator_) {
+    std::cout << indent(next) << "(operator " << expression.operator_.get() << ")" << std::endl;
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void ExpressionPrinter::operator()(ast::LhsExpression const& expression) {
-  std::cout << indent(indentation) << "(LhsExpression)" << std::endl;
+  ExpressionPrinter printer(indentation + INDENT_STEP);
+  std::cout << indent(indentation) << "(LhsExpression" << std::endl;
+  boost::apply_visitor(printer, expression);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::CallExpression const& expression) {
+  std::cout << indent(indentation) << "(CallExpression)" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::NewExpression const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+
+  std::cout << indent(indentation) << "(NewExpression" << std::endl;
+  for (std::vector<std::string>::const_iterator it = expression.operators.begin();
+       it != expression.operators.end(); ++it) {
+    std::cout << indent(next) << "(operator " << *it << ")" << std::endl;
+  }
+
+  print(expression.member);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::MemberExpression const& expression) {
+  ExpressionPrinter printer(indentation + INDENT_STEP);
+  std::cout << indent(indentation) << "(MemberExpression" << std::endl;
+  boost::apply_visitor(printer, expression);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::MemberAccess const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next + INDENT_STEP);
+  std::cout << indent(indentation) << "(MemberAccess" << std::endl;
+
+  std::cout << indent(next) << "(member " << std::endl;
+  print(expression.member);
+  std::cout << indent(next) << ")" << std::endl;
+
+  if (!expression.modifiers.empty()) {
+    std::cout << indent(next) << "(modifiers " << std::endl;
+    std::for_each(expression.modifiers.begin(), expression.modifiers.end(), print);
+    std::cout << indent(next) << ")" << std::endl;
+  }
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::MemberOptions const& expression) {
+  ExpressionPrinter printer(indentation + INDENT_STEP);
+  std::cout << indent(indentation) << "(MemberOptions" << std::endl;
+  boost::apply_visitor(printer, expression);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::MemberModifier const& expression) {
+  std::cout << indent(indentation) << "(MemberModifier)" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::Instantiation const& expression) {
+  int next = indentation + INDENT_STEP;
+  ExpressionPrinter print(next);
+  StatementPrinter print_statement(next + INDENT_STEP);
+
+  std::cout << indent(indentation) << "(Instantiation" << std::endl;
+  print(expression.member);
+
+  std::cout << indent(next) << "(arguments " << std::endl;
+  print_statement(expression.arguments);
+  std::cout << indent(next) << ")" << std::endl;
+
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::PrimaryExpression const& expression) {
+  PrimaryExpressionPrinter printer(indentation + INDENT_STEP);
+  std::cout << indent(indentation) << "(PrimaryExpression" << std::endl;
+  boost::apply_visitor(printer, expression);
+  std::cout << indent(indentation) << ")" << std::endl;
+}
+
+void ExpressionPrinter::operator()(ast::FunctionExpression const& expression) {
+  std::cout << indent(indentation) << "(FunctionExpression)" << std::endl;
+}
+
+
+PrimaryExpressionPrinter::PrimaryExpressionPrinter(int indent) : indentation(indent) {}
+
+void PrimaryExpressionPrinter::operator()(ast::This const& node) {
+  std::cout << indent(indentation) << "(This)" << std::endl;
+}
+
+void PrimaryExpressionPrinter::operator()(std::string const& identifier) {
+  std::cout << indent(indentation) << "(identifier " << identifier << ")" << std::endl;
+}
+
+void PrimaryExpressionPrinter::operator()(ast::Literal const& literal) {
+  std::cout << indent(indentation) << "(literal " << literal << ")" << std::endl;
+}
+
+void PrimaryExpressionPrinter::operator()(ast::Expression const& expression) {
+  StatementPrinter print(indentation);
+  print(expression);
 }
 
 
 } // namespace kunjs
+
+namespace std {
+std::ostream& operator<<(std::ostream& stream, kunjs::ast::Null const& value) {
+  stream << "null";
+  return stream;
+}
+}
 

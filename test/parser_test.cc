@@ -99,6 +99,30 @@ TEST(Parser, Ternary) {
   ASSERT_TRUE(result);
 }
 
+TEST(Parser, BitwiseOr) {
+  kunjs::Parser parser;
+  bool result = parser.parse("var n = 1234 | 1;");
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, BitwiseXor) {
+  kunjs::Parser parser;
+  bool result = parser.parse("var n = 1234 ^ 143;");
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, BitwiseAnd) {
+  kunjs::Parser parser;
+  bool result = parser.parse("var n = 1234 & 143;");
+  ASSERT_TRUE(result);
+}
+
+TEST(Parser, ComplexLogicalExpression) {
+  kunjs::Parser parser;
+  bool result = parser.parse("var n = 1234 & 143 || truth() ^ 45 && 10 == 43;");
+  ASSERT_TRUE(result);
+}
+
 TEST(Parser, DoWhile) {
   kunjs::Parser parser;
   std::string code =
@@ -159,7 +183,7 @@ TEST(Parser, FunctionDefinition) {
 TEST(Parser, If) {
   kunjs::Parser parser;
   std::string code =
-      "if(n < 100) {"
+      "if(n < 100 || big) {"
       "  result = 'big';"
       "}";
   bool result = parser.parse(code);
@@ -169,7 +193,7 @@ TEST(Parser, If) {
 TEST(Parser, IfElse) {
   kunjs::Parser parser;
   std::string code =
-      "if (t == 'some text') {"
+      "if (t == 'some text' && valid) {"
       "  result -= 10;"
       "} else {"
       "  result += 20;"

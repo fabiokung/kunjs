@@ -36,11 +36,11 @@ typedef boost::variant<
           boost::recursive_wrapper<FunctionExpression>
         > MemberOptions;
 
-typedef boost::variant<Expression, std::string> MemberModifiers;
+typedef boost::variant<Expression, std::string> MemberModifier;
 
 struct MemberAccess {
   MemberOptions member;
-  std::vector<MemberModifiers> modifiers;
+  std::vector<MemberModifier> modifiers;
 };
 
 struct Instantiation;
@@ -74,7 +74,7 @@ struct PostfixExpression {
 };
 
 struct UnaryExpression {
-  std::vector<std::string> indecrements;
+  std::vector<std::string> operators;
   PostfixExpression rhs;
 };
 
@@ -360,7 +360,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::MemberAccess,
     (kunjs::ast::MemberOptions, member)
-    (std::vector<kunjs::ast::MemberModifiers>, modifiers)
+    (std::vector<kunjs::ast::MemberModifier>, modifiers)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -390,7 +390,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     kunjs::ast::UnaryExpression,
-    (std::vector<std::string>, indecrements)
+    (std::vector<std::string>, operators)
     (kunjs::ast::PostfixExpression, rhs)
 )
 

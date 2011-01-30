@@ -143,15 +143,15 @@ javascript_grammar<Iterator>::javascript_grammar()
   conditional_expression %= logical_or_expression
       >> -(conditional_clauses);
 
-  logical_or_expression %= logical_and_expression >> *("||" > logical_and_expression);
+  logical_or_expression %= logical_and_expression >> *("||" >> logical_and_expression);
 
-  logical_and_expression %= bitwise_or_expression >> *("&&" > bitwise_or_expression);
+  logical_and_expression %= bitwise_or_expression >> *("&&" >> bitwise_or_expression);
 
-  bitwise_or_expression %= bitwise_xor_expression >> *("|" > bitwise_xor_expression);
+  bitwise_or_expression %= bitwise_xor_expression >> *("|" >> bitwise_xor_expression);
 
-  bitwise_xor_expression %= bitwise_and_expression >> *("^" > bitwise_and_expression);
+  bitwise_xor_expression %= bitwise_and_expression >> *("^" >> bitwise_and_expression);
 
-  bitwise_and_expression %= equality_expression >> *("&" > equality_expression);
+  bitwise_and_expression %= equality_expression >> *("&" >> equality_expression);
 
   equality_expression %= relational_expression >> *(equality_operator > relational_expression);
   equality_operator %= 
