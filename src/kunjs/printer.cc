@@ -21,6 +21,7 @@ std::string indent(int level) {
 
 }
 
+
 ASTPrinter::ASTPrinter(int indent) : indentation(indent) {}
 
 void ASTPrinter::operator()(std::vector<ast::Statement> const& list) const {
@@ -28,18 +29,16 @@ void ASTPrinter::operator()(std::vector<ast::Statement> const& list) const {
 }
 
 void ASTPrinter::operator()(ast::Program const& program) const {
+  ASTPrinter printer(indentation + INDENT_STEP);
   std::cout << indent(indentation) << "(Program " << std::endl;
-  indentation += INDENT_STEP;
-  std::for_each(program.begin(), program.end(), *this);
-  indentation -= INDENT_STEP;
+  std::for_each(program.begin(), program.end(), printer);
   std::cout << indent(indentation) << ")" << std::endl;
 }
 
 void ASTPrinter::operator()(ast::SourceElement const& element) const {
+  ASTPrinter printer(indentation + INDENT_STEP);
   std::cout << indent(indentation) << "(SourceElement " << std::endl;
-  indentation += INDENT_STEP;
-  boost::apply_visitor(*this, element);
-  indentation -= INDENT_STEP;
+  boost::apply_visitor(printer, element);
   std::cout << indent(indentation) << ")" << std::endl;
 }
 
@@ -48,8 +47,8 @@ void ASTPrinter::operator()(ast::FunctionDeclaration const& function) const {
 }
 
 void ASTPrinter::operator()(ast::Statement const& statement) const {
-  std::cout << indent(indentation) << "(Statement " << std::endl;
   StatementPrinter printer(indentation + INDENT_STEP);
+  std::cout << indent(indentation) << "(Statement " << std::endl;
   boost::apply_visitor(printer, statement);
   std::cout << indent(indentation) << ")" << std::endl;
 }
