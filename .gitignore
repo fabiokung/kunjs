@@ -9,5 +9,5 @@ Makefile
 *.a
 gtest_unittest
 kungjs
-run-tests
+run-*
 .svn/
