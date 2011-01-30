@@ -1,6 +1,7 @@
 CMakeCache.txt
 CMakeFiles/
 Testing/
+build/
 *.cmake
 *.swp
 *~
