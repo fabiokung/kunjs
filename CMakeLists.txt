@@ -4,15 +4,21 @@ project(kunjs)
 find_package(GTest REQUIRED)
 find_package(Boost 1.45.0 REQUIRED)
 
+set(LLVM_ROOT "${PROJECT_SOURCE_DIR/utils/llvm}" CACHE PATH "Root of LLVM install.")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_ROOT}/cmake/modules")
+include(LLVM)
+
 include_directories(
+    ${PROJECT_SOURCE_DIR}/src
+    ${LLVM_ROOT}/include
     ${Boost_INCLUDES}
-    ${GTest_INCLUDES}
-    ${PROJECT_SOURCE_DIR}/src)
+    ${GTest_INCLUDES})
 
 link_directories(
     ${PROJECT_BINARY_DIR}
-    ${GTest_LIBRARIES}
-    ${Boost_LIBRARIES})
+    ${LLVM_ROOT}/lib
+    ${Boost_LIBRARIES}
+    ${GTest_LIBRARIES})
 
 add_library(grammar src/kunjs/grammar.cc)
 add_library(printer src/kunjs/printer.cc)
