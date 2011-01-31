@@ -84,14 +84,41 @@ llvm::Value* ExpressionCompiler::operator()(ast::RelationalExpression const& exp
   //}
 }
 
-llvm::Value* ExpressionCompiler::operator()(ast::ShiftExpression const& expression) {
-  return (*this)(expression.lhs);
+llvm::Value* ExpressionCompiler::CreateShlInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  return builder.CreateShl(builder.CreateFPToSI(lhs, llvm::Type::getInt32Ty(context)),
+                           builder.CreateFPToUI(rhs, llvm::Type::getInt32Ty(context)),
+                           "<<");
+}
 
-  //for (std::vector<ast::ShiftOperation>::const_iterator it = expression.operations.begin();
-  //it != expression.operations.end(); ++it) {
-  //it->operator_;
-  //(*this)(it->rhs);
-  //}
+llvm::Value* ExpressionCompiler::CreateAShrInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  return builder.CreateAShr(builder.CreateFPToSI(lhs, llvm::Type::getInt32Ty(context)),
+                            builder.CreateFPToUI(rhs, llvm::Type::getInt32Ty(context)),
+                            ">>");
+}
+
+llvm::Value* ExpressionCompiler::CreateLShrInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  return builder.CreateLShr(builder.CreateFPToSI(lhs, llvm::Type::getInt32Ty(context)),
+                            builder.CreateFPToUI(rhs, llvm::Type::getInt32Ty(context)),
+                            ">>>");
+}
+
+llvm::Value* ExpressionCompiler::operator()(ast::ShiftExpression const& expression) {
+  llvm::Value* result = (*this)(expression.lhs);
+
+  for (std::vector<ast::ShiftOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    llvm::Value* rhs = (*this)(it->rhs);
+    if (it->operator_ == ">>>") {
+      result = CreateLShrInstruction(result, rhs);
+    } else if (it->operator_ == "<<") {
+      result = CreateShlInstruction(result, rhs);
+    } else if (it->operator_ == ">>") {
+      result = CreateAShrInstruction(result, rhs);
+    } // TODO: else throw error
+  }
+
+  return result;
+
 }
 
 llvm::Value* ExpressionCompiler::CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs) {
@@ -122,8 +149,7 @@ llvm::Value* ExpressionCompiler::operator()(ast::AdditiveExpression const& expre
     llvm::Value* rhs = (*this)(it->rhs);
     if (it->operator_ == "+") {
       result = CreateAddInstruction(result, rhs);
-    }
-    else if (it->operator_ == "-") {
+    } else if (it->operator_ == "-") {
       result = CreateSubInstruction(result, rhs);
     } // TODO: else throw error
   }
@@ -302,7 +328,7 @@ llvm::Value* LiteralCompiler::operator()(ast::Numeric const& numeric) {
 }
 
 llvm::Value* LiteralCompiler::operator()(int literal) {
-  return llvm::ConstantInt::get(context, llvm::APInt(64, literal, true));
+  return llvm::ConstantInt::getSigned(llvm::Type::getInt32Ty(context), literal);
 }
 
 llvm::Value* LiteralCompiler::operator()(double literal) {

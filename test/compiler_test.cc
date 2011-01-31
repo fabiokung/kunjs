@@ -63,6 +63,66 @@ TEST(Compiler, False) {
   ASSERT_TRUE(r->isZero());
 }
 
+TEST(Compiler, ShiftLeft) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("55 << 4;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(880));
+}
+
+TEST(Compiler, ShiftRight) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("451 >> 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(112));
+}
+
+TEST(Compiler, SignalShiftRight) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("-451 >>> 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(112));
+}
+
+TEST(Compiler, FloatShiftLeft) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("55 << 4.0;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(880));
+}
+
+TEST(Compiler, FloatShiftRight) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("-21.0 >> 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(5));
+}
+
+TEST(Compiler, FloatSignalShiftRight) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("-451.0 >>> 2.3;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->equalsInt(112));
+}
+
 TEST(Compiler, SimpleIntArithmetic) {
   kunjs::Compiler compiler;
   llvm::Value* result = compiler.compile("1+2;");
@@ -70,7 +130,7 @@ TEST(Compiler, SimpleIntArithmetic) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, 3, true) == r->getValue());
+  ASSERT_TRUE(r->equalsInt(3));
 }
 
 TEST(Compiler, ComplexIntArithmetic) {
@@ -80,7 +140,7 @@ TEST(Compiler, ComplexIntArithmetic) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, -5, true) == r->getValue());
+  ASSERT_TRUE(r->equalsInt(-5U));
 }
 
 TEST(Compiler, SimpleFloatArithmetic) {
@@ -110,7 +170,7 @@ TEST(Compiler, IntMultiplication) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, 45, true) == r->getValue());
+  ASSERT_TRUE(r->equalsInt(45));
 }
 
 TEST(Compiler, ComplexIntMultiplication) {
@@ -120,7 +180,7 @@ TEST(Compiler, ComplexIntMultiplication) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, 8, true) == r->getValue());
+  ASSERT_TRUE(r->equalsInt(8));
 }
 
 TEST(Compiler, FloatMultiplication) {

@@ -46,6 +46,9 @@ class ExpressionCompiler : public boost::static_visitor<llvm::Value*> {
   llvm::Value* operator()(ast::FunctionExpression const& expression);
 
  private:
+  llvm::Value* CreateShlInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateAShrInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateLShrInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateSubInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateMulInstruction(llvm::Value* lhs, llvm::Value* rhs);
