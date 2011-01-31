@@ -70,7 +70,7 @@ TEST(Compiler, SimpleIntArithmetic) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, 3, false) == r->getValue());
+  ASSERT_TRUE(llvm::APInt(64, 3, true) == r->getValue());
 }
 
 TEST(Compiler, ComplexIntArithmetic) {
@@ -80,7 +80,7 @@ TEST(Compiler, ComplexIntArithmetic) {
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
   llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
-  ASSERT_TRUE(llvm::APInt(64, -5, false) == r->getValue());
+  ASSERT_TRUE(llvm::APInt(64, -5, true) == r->getValue());
 }
 
 TEST(Compiler, SimpleFloatArithmetic) {
@@ -95,11 +95,51 @@ TEST(Compiler, SimpleFloatArithmetic) {
 
 TEST(Compiler, ComplexFloatArithmetic) {
   kunjs::Compiler compiler;
-  llvm::Value* result = compiler.compile("4.123 + 62.145 - 108.2;");
+  llvm::Value* result = compiler.compile("4.123 -20 + 62.145 - 108.2;");
   DumpValue(result);
 
   ASSERT_TRUE(llvm::isa<llvm::ConstantFP>(result));
   llvm::ConstantFP* r = llvm::cast<llvm::ConstantFP>(result);
-  ASSERT_TRUE(r->isExactlyValue(-41.932));
+  ASSERT_TRUE(r->isExactlyValue(-61.932));
+}
+
+TEST(Compiler, IntMultiplication) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("5*9;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(llvm::APInt(64, 45, true) == r->getValue());
+}
+
+TEST(Compiler, ComplexIntMultiplication) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("1/2+2*(3+7) - 12;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(llvm::APInt(64, 8, true) == r->getValue());
+}
+
+TEST(Compiler, FloatMultiplication) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("5.0 / 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantFP>(result));
+  llvm::ConstantFP* r = llvm::cast<llvm::ConstantFP>(result);
+  ASSERT_TRUE(r->isExactlyValue(2.5));
+}
+
+TEST(Compiler, ComplexFloatMultiplication) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("10 % 3 + 7 * 3 / 4.0;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantFP>(result));
+  llvm::ConstantFP* r = llvm::cast<llvm::ConstantFP>(result);
+  ASSERT_TRUE(r->isExactlyValue(6.25));
 }
 

@@ -95,15 +95,23 @@ llvm::Value* ExpressionCompiler::operator()(ast::ShiftExpression const& expressi
 }
 
 llvm::Value* ExpressionCompiler::CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs) {
-  if(lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy())
-    return builder.CreateFAdd(lhs, rhs, "add_double");
-  else return builder.CreateAdd(lhs, rhs, "add_int");
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFAdd(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                              builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                              "add_double");
+  } else {
+    return builder.CreateAdd(lhs, rhs, "add_int");
+  }
 }
 
 llvm::Value* ExpressionCompiler::CreateSubInstruction(llvm::Value* lhs, llvm::Value* rhs) {
-  if(lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy())
-    return builder.CreateFSub(lhs, rhs, "sub_double");
-  else return builder.CreateSub(lhs, rhs, "sub_int");
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFSub(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                              builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                              "sub_double");
+  } else {
+    return builder.CreateSub(lhs, rhs, "sub_int");
+  }
 }
 
 llvm::Value* ExpressionCompiler::operator()(ast::AdditiveExpression const& expression) {
@@ -123,14 +131,52 @@ llvm::Value* ExpressionCompiler::operator()(ast::AdditiveExpression const& expre
   return result;
 }
 
-llvm::Value* ExpressionCompiler::operator()(ast::MultiplicativeExpression const& expression) {
-  return (*this)(expression.lhs);
+llvm::Value* ExpressionCompiler::CreateMulInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFMul(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                              builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                              "mul_double");
+  } else {
+    return builder.CreateMul(lhs, rhs, "mul_int");
+  }
+}
 
-  //for (std::vector<ast::MultiplicativeOperation>::const_iterator it = expression.operations.begin();
-  //it != expression.operations.end(); ++it) {
-  //it->operator_;
-  //(*this)(it->rhs);
-  //}
+llvm::Value* ExpressionCompiler::CreateDivInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFDiv(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                              builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                              "div_double");
+  } else {
+    return builder.CreateSDiv(lhs, rhs, "div_int");
+  }
+}
+
+llvm::Value* ExpressionCompiler::CreateRemInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFRem(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                              builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                              "rem_double");
+  } else {
+    return builder.CreateSRem(lhs, rhs, "rem_int");
+  }
+}
+
+llvm::Value* ExpressionCompiler::operator()(ast::MultiplicativeExpression const& expression) {
+  llvm::Value* result = (*this)(expression.lhs);
+
+  for (std::vector<ast::MultiplicativeOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    llvm::Value* rhs = (*this)(it->rhs);
+    if (it->operator_ == "*") {
+      result = CreateMulInstruction(result, rhs);
+    } else if (it->operator_ == "/") {
+      result = CreateDivInstruction(result, rhs);
+    } else if (it->operator_ == "%") {
+      result = CreateRemInstruction(result, rhs);
+    } // TODO: else throw error
+  }
+
+  return result;
 }
 
 llvm::Value* ExpressionCompiler::operator()(ast::UnaryExpression const& expression) {

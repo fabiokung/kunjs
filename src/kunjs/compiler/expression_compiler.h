@@ -48,6 +48,9 @@ class ExpressionCompiler : public boost::static_visitor<llvm::Value*> {
  private:
   llvm::Value* CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateSubInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateMulInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateDivInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateRemInstruction(llvm::Value* lhs, llvm::Value* rhs);
 
   llvm::LLVMContext& context;
   llvm::IRBuilder<> builder;
