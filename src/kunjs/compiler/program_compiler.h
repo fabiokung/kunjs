@@ -28,7 +28,6 @@ class ProgramCompiler : public boost::static_visitor<llvm::Value*> {
 
  private:
   llvm::LLVMContext& context;
-  mutable llvm::Value* result;
 };
 
 } // namespace compiler

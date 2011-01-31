@@ -15,7 +15,9 @@ llvm::Value* Compiler::compile(std::string code) {
   compiler::ProgramCompiler compile(llvm::getGlobalContext());
 
   parser.parse(code, ast);
-  return compile(ast);
+  llvm::Value* result = compile(ast);
+  result->dump();
+  return result;
 }
 
 } // namespace kunjs

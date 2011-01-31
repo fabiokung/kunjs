@@ -22,7 +22,7 @@ link_directories(
     ${Boost_LIBRARIES}
     ${LLVM_ROOT}/lib)
 
-#file(GLOB_RECURSE COMPILER_SOURCES src/kunjs/compiler/*.cc)
+file(GLOB_RECURSE COMPILER_SOURCES src/kunjs/compiler/*.cc)
 llvm_map_components_to_libraries(REQ_LLVM_LIBRARIES core jit native)
 
 add_library(grammar src/kunjs/grammar.cc)
@@ -30,7 +30,7 @@ add_library(printer src/kunjs/printer.cc)
 add_library(parser src/kunjs/parser.cc)
 target_link_libraries(parser printer grammar)
 
-add_library(compiler src/kunjs/compiler.cc src/kunjs/compiler/program_compiler.cc)
+add_library(compiler src/kunjs/compiler.cc ${COMPILER_SOURCES})
 target_link_libraries(compiler parser ${REQ_LLVM_LIBRARIES})
 
 add_executable(run-parser-tests test/parser_test.cc)

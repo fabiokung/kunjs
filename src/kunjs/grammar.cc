@@ -262,7 +262,7 @@ javascript_grammar<Iterator>::javascript_grammar()
 
   null_literal %= string("null")[_val = construct<ast::Null>()];
 
-  numeric_literal %= double_ | int_;
+  numeric_literal %= int_ >> !lit('.') | double_;
 
   string_literal %=
       '"' >> lexeme[*(~char_('"'))] >> '"'

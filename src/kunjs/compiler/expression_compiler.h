@@ -7,54 +7,80 @@
 
 #include "kunjs/ast.h"
 #include <boost/variant/static_visitor.hpp>
+
+#include <llvm/Value.h>
+#include <llvm/Support/IRBuilder.h>
+#include <llvm/LLVMContext.h>
+
 #include <string>
 
 namespace kunjs { namespace compiler {
 
-class ExpressionCompiler : public boost::static_visitor<> {
+class ExpressionCompiler : public boost::static_visitor<llvm::Value*> {
 
  public:
-  ExpressionCompiler();
-  void operator()(ast::AssignmentExpression const& expression);
-  void operator()(ast::ConditionalExpression const& expression);
-  void operator()(ast::LogicalOrExpression const& expression);
-  void operator()(ast::LogicalAndExpression const& expression);
-  void operator()(ast::BitwiseOrExpression const& expression);
-  void operator()(ast::BitwiseXorExpression const& expression);
-  void operator()(ast::BitwiseAndExpression const& expression);
-  void operator()(ast::EqualityExpression const& expression);
-  void operator()(ast::RelationalExpression const& expression);
-  void operator()(ast::ShiftExpression const& expression);
-  void operator()(ast::AdditiveExpression const& expression);
-  void operator()(ast::MultiplicativeExpression const& expression);
-  void operator()(ast::UnaryExpression const& expression);
-  void operator()(ast::PostfixExpression const& expression);
-  void operator()(ast::LhsExpression const& expression);
-  void operator()(ast::CallExpression const& expression);
-  void operator()(ast::NewExpression const& expression);
-  void operator()(ast::MemberExpression const& expression);
-  void operator()(ast::MemberAccess const& expression);
-  void operator()(ast::MemberOptions const& expression);
-  void operator()(ast::MemberModifier const& expression);
-  void operator()(ast::Instantiation const& expression);
-  void operator()(ast::PrimaryExpression const& expression);
-  void operator()(ast::FunctionExpression const& expression);
-
+  ExpressionCompiler(llvm::LLVMContext& context);
+  llvm::Value* operator()(ast::AssignmentExpression const& expression);
+  llvm::Value* operator()(ast::ConditionalExpression const& expression);
+  llvm::Value* operator()(ast::LogicalOrExpression const& expression);
+  llvm::Value* operator()(ast::LogicalAndExpression const& expression);
+  llvm::Value* operator()(ast::BitwiseOrExpression const& expression);
+  llvm::Value* operator()(ast::BitwiseXorExpression const& expression);
+  llvm::Value* operator()(ast::BitwiseAndExpression const& expression);
+  llvm::Value* operator()(ast::EqualityExpression const& expression);
+  llvm::Value* operator()(ast::RelationalExpression const& expression);
+  llvm::Value* operator()(ast::ShiftExpression const& expression);
+  llvm::Value* operator()(ast::AdditiveExpression const& expression);
+  llvm::Value* operator()(ast::MultiplicativeExpression const& expression);
+  llvm::Value* operator()(ast::UnaryExpression const& expression);
+  llvm::Value* operator()(ast::PostfixExpression const& expression);
+  llvm::Value* operator()(ast::LhsExpression const& expression);
+  llvm::Value* operator()(ast::CallExpression const& expression);
+  llvm::Value* operator()(ast::NewExpression const& expression);
+  llvm::Value* operator()(ast::MemberExpression const& expression);
+  llvm::Value* operator()(ast::MemberAccess const& expression);
+  llvm::Value* operator()(ast::MemberOptions const& expression);
+  llvm::Value* operator()(ast::MemberModifier const& expression);
+  llvm::Value* operator()(ast::Instantiation const& expression);
+  llvm::Value* operator()(ast::PrimaryExpression const& expression);
+  llvm::Value* operator()(ast::FunctionExpression const& expression);
 
  private:
+  llvm::Value* CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateSubInstruction(llvm::Value* lhs, llvm::Value* rhs);
+
+  llvm::LLVMContext& context;
+  llvm::IRBuilder<> builder;
 
 };
 
 
-class PrimaryExpressionCompiler : public boost::static_visitor<> {
+class PrimaryExpressionCompiler : public boost::static_visitor<llvm::Value*> {
  public:
-  PrimaryExpressionCompiler();
-  void operator()(ast::This const& node);
-  void operator()(std::string const& identifier);
-  void operator()(ast::Literal const& literal);
-  void operator()(ast::Expression const& expression);
+  PrimaryExpressionCompiler(llvm::LLVMContext& context);
+  llvm::Value* operator()(ast::This const& node);
+  llvm::Value* operator()(std::string const& identifier);
+  llvm::Value* operator()(ast::Literal const& literal);
+  llvm::Value* operator()(ast::Expression const& expression);
 
  private:
+  llvm::LLVMContext& context;
+
+};
+
+
+class LiteralCompiler : public boost::static_visitor<llvm::Value*> {
+ public:
+  LiteralCompiler(llvm::LLVMContext& context);
+  llvm::Value* operator()(ast::Null const& literal);
+  llvm::Value* operator()(bool literal);
+  llvm::Value* operator()(ast::Numeric const& numeric);
+  llvm::Value* operator()(int literal);
+  llvm::Value* operator()(double literal);
+  llvm::Value* operator()(std::string const& literal);
+
+ private:
+  llvm::LLVMContext& context;
 
 };
 
