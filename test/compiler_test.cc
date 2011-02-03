@@ -203,3 +203,63 @@ TEST(Compiler, ComplexFloatMultiplication) {
   ASSERT_TRUE(r->isExactlyValue(6.25));
 }
 
+TEST(Compiler, LessThanOrEqual) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("4 <= 13 - 3;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isOne());
+}
+
+TEST(Compiler, GreaterThanOrEqual) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("4 >= 13 - 9;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isOne());
+}
+
+TEST(Compiler, LessThan) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("2 < 2.0;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isZero());
+}
+
+TEST(Compiler, GreaterThan) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("32.3 > 1;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isOne());
+}
+
+TEST(Compiler, Equal) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("2 == 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isOne());
+}
+
+TEST(Compiler, NotEqual) {
+  kunjs::Compiler compiler;
+  llvm::Value* result = compiler.compile("2.0 != 2;");
+  DumpValue(result);
+
+  ASSERT_TRUE(llvm::isa<llvm::ConstantInt>(result));
+  llvm::ConstantInt* r = llvm::cast<llvm::ConstantInt>(result);
+  ASSERT_TRUE(r->isZero());
+}
+

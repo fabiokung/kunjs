@@ -65,23 +65,106 @@ llvm::Value* ExpressionCompiler::operator()(ast::BitwiseAndExpression const& exp
   //std::for_each(expression.operations.begin(), expression.operations.end(), *this);
 }
 
+llvm::Value* ExpressionCompiler::CreateCmpEQInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpOEQ(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_oeq");
+  } else {
+    return builder.CreateICmpEQ(lhs, rhs, "icmp_seq");
+  }
+}
+
+llvm::Value* ExpressionCompiler::CreateCmpNEInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpONE(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_one");
+  } else {
+    return builder.CreateICmpNE(lhs, rhs, "icmp_sne");
+  }
+}
+
 llvm::Value* ExpressionCompiler::operator()(ast::EqualityExpression const& expression) {
-  return (*this)(expression.lhs);
-  //for (std::vector<ast::EqualityOperation>::const_iterator it = expression.operations.begin();
-  //it != expression.operations.end(); ++it) {
-  //it->operator_;
-  //(*this)(it->rhs);
-  //}
+  llvm::Value* result = (*this)(expression.lhs);
+  for (std::vector<ast::EqualityOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    llvm::Value* rhs = (*this)(it->rhs);
+    if (it->operator_ == "===") {
+      result = CreateCmpEQInstruction(result, rhs);
+    } else if (it->operator_ == "!==") {
+      result = CreateCmpNEInstruction(result, rhs);
+    } else if (it->operator_ == "==") {
+      result = CreateCmpEQInstruction(result, rhs);
+    } else if (it->operator_ == "!=") {
+      result = CreateCmpNEInstruction(result, rhs);
+    } // TODO: else { throw error }
+  }
+  return result;
+}
+
+llvm::Value* ExpressionCompiler::CreateCmpLEInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpOLE(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_ole");
+  } else {
+    return builder.CreateICmpSLE(lhs, rhs, "icmp_sle");
+  }
+}
+
+llvm::Value* ExpressionCompiler::CreateCmpGEInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpOGE(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_oge");
+  } else {
+    return builder.CreateICmpSGE(lhs, rhs, "icmp_sge");
+  }
+}
+
+llvm::Value* ExpressionCompiler::CreateCmpLTInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpOLT(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_olt");
+  } else {
+    return builder.CreateICmpSLT(lhs, rhs, "icmp_slt");
+  }
+}
+
+llvm::Value* ExpressionCompiler::CreateCmpGTInstruction(llvm::Value* lhs, llvm::Value* rhs) {
+  if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+    return builder.CreateFCmpOGT(builder.CreateSIToFP(lhs, llvm::Type::getDoubleTy(context)),
+                                 builder.CreateSIToFP(rhs, llvm::Type::getDoubleTy(context)),
+                                 "fcmp_ogt");
+  } else {
+    return builder.CreateICmpSGT(lhs, rhs, "icmp_sgt");
+  }
 }
 
 llvm::Value* ExpressionCompiler::operator()(ast::RelationalExpression const& expression) {
-  return (*this)(expression.lhs);
+  llvm::Value* result = (*this)(expression.lhs);
 
-  //for (std::vector<ast::RelationalOperation>::const_iterator it = expression.operations.begin();
-  //it != expression.operations.end(); ++it) {
-  //it->operator_;
-  //(*this)(it->rhs);
-  //}
+  for (std::vector<ast::RelationalOperation>::const_iterator it = expression.operations.begin();
+       it != expression.operations.end(); ++it) {
+    llvm::Value* rhs = (*this)(it->rhs);
+    if (it->operator_ == "<=") {
+      result = CreateCmpLEInstruction(result, rhs);
+    } else if (it->operator_ == ">=") {
+      result = CreateCmpGEInstruction(result, rhs);
+    } else if (it->operator_ == "<") {
+      result = CreateCmpLTInstruction(result, rhs);
+    } else if (it->operator_ == ">") {
+      result = CreateCmpGTInstruction(result, rhs);
+    //} else if (it->operator_ == "instanceof") {
+    //  result = CreateInstanceofInstruction(result, rhs);
+    //} else if (it->operator_ == "in") {
+    //  result = CreateInInstruction(result, rhs);
+    } // TODO: else { throw error }
+  }
+
+  return result;
 }
 
 llvm::Value* ExpressionCompiler::CreateShlInstruction(llvm::Value* lhs, llvm::Value* rhs) {

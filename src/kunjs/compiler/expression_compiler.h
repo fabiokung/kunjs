@@ -46,11 +46,20 @@ class ExpressionCompiler : public boost::static_visitor<llvm::Value*> {
   llvm::Value* operator()(ast::FunctionExpression const& expression);
 
  private:
+  llvm::Value* CreateCmpEQInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateCmpNEInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateCmpLEInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateCmpGEInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateCmpLTInstruction(llvm::Value* lhs, llvm::Value* rhs);
+  llvm::Value* CreateCmpGTInstruction(llvm::Value* lhs, llvm::Value* rhs);
+
   llvm::Value* CreateShlInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateAShrInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateLShrInstruction(llvm::Value* lhs, llvm::Value* rhs);
+
   llvm::Value* CreateAddInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateSubInstruction(llvm::Value* lhs, llvm::Value* rhs);
+
   llvm::Value* CreateMulInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateDivInstruction(llvm::Value* lhs, llvm::Value* rhs);
   llvm::Value* CreateRemInstruction(llvm::Value* lhs, llvm::Value* rhs);
