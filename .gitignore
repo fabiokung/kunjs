@@ -2,11 +2,11 @@ CMakeCache.txt
 CMakeFiles/
 Testing/
 build/
+.svn/
 *.swp
 *~
 Makefile
 *.a
-gtest_unittest
-kungjs
 run-*
-.svn/
+CTestTestfile.cmake
+cmake_install.cmake
